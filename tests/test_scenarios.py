@@ -1,9 +1,11 @@
+
 from decimal import Decimal
 
 import pytest
 
 from backend.app.scenarios.overpayments import (
     generate_overpayment_scenarios,
+    generate_renewal_overpayment_scenarios,
 )
 
 
@@ -156,4 +158,99 @@ def test_rejects_overpayment_exceeding_mortgage_balance():
             Decimal("500000"),
             Decimal("400000"),
             [Decimal("350000")],
+        )
+
+
+def test_projects_overpayment_scenarios_to_renewal():
+    scenarios = generate_renewal_overpayment_scenarios(
+        mortgage_balance=Decimal("1000"),
+        property_value=Decimal("2000"),
+        available_cash=Decimal("100"),
+        annual_interest_rate_percent=Decimal("12"),
+        monthly_payment=Decimal("100"),
+        months_until_renewal=2,
+        overpayment_options=[
+            Decimal("0"),
+            Decimal("100"),
+        ],
+    )
+
+    assert [
+        scenario.projected_mortgage_balance
+        for scenario in scenarios
+    ] == [
+        Decimal("819.10"),
+        Decimal("717.09"),
+    ]
+
+    assert [
+        scenario.projected_ltv_percent
+        for scenario in scenarios
+    ] == [
+        Decimal("40.96"),
+        Decimal("35.85"),
+    ]
+
+    assert [
+        scenario.cash_remaining
+        for scenario in scenarios
+    ] == [
+        Decimal("100"),
+        Decimal("0"),
+    ]
+
+
+def test_zero_months_preserves_balance_after_overpayment():
+    scenarios = generate_renewal_overpayment_scenarios(
+        mortgage_balance=Decimal("1000"),
+        property_value=Decimal("2000"),
+        available_cash=Decimal("100"),
+        annual_interest_rate_percent=Decimal("12"),
+        monthly_payment=Decimal("100"),
+        months_until_renewal=0,
+        overpayment_options=[Decimal("100")],
+    )
+
+    assert (
+        scenarios[0].projected_mortgage_balance
+        == Decimal("900.00")
+    )
+
+
+def test_renewal_scenarios_reject_negative_months():
+    with pytest.raises(ValueError):
+        generate_renewal_overpayment_scenarios(
+            Decimal("1000"),
+            Decimal("2000"),
+            Decimal("100"),
+            Decimal("5"),
+            Decimal("100"),
+            -1,
+            [Decimal("0")],
+        )
+
+
+def test_renewal_scenarios_reject_negative_monthly_payment():
+    with pytest.raises(ValueError):
+        generate_renewal_overpayment_scenarios(
+            Decimal("1000"),
+            Decimal("2000"),
+            Decimal("100"),
+            Decimal("5"),
+            Decimal("-100"),
+            6,
+            [Decimal("0")],
+        )
+
+
+def test_renewal_scenarios_reject_overpayment_above_available_cash():
+    with pytest.raises(ValueError):
+        generate_renewal_overpayment_scenarios(
+            Decimal("1000"),
+            Decimal("2000"),
+            Decimal("100"),
+            Decimal("5"),
+            Decimal("100"),
+            6,
+            [Decimal("101")],
         )
