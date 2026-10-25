@@ -718,3 +718,132 @@ tbody tr:hover td {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+.insights-section {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid #cce8d7;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f1faf3, #ffffff 80%);
+}
+
+.insights-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.insights-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-family: 'Manrope', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.insight-symbol {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #dff3e5;
+  color: var(--green);
+  font-size: 22px;
+}
+
+.insight-card {
+  margin-top: 17px;
+  padding: 17px;
+  border: 1px solid #deeee2;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.insight-label {
+  margin: 0 0 8px;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+}
+
+.insight-card h4 {
+  margin: 0;
+  color: var(--ink);
+  font-family: 'Manrope', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.insight-message {
+  margin: 9px 0 0;
+  color: #536b63;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.insight-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.insight-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px;
+  border: 1px solid #e1eee4;
+  border-radius: 9px;
+  background: #f7fbf8;
+}
+
+.insight-metric span {
+  color: #7a8c82;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.insight-metric strong {
+  color: #146548;
+  font-family: 'Manrope', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.insight-disclaimer {
+  margin: 12px 0 0;
+  color: #7a8c82;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+@media (max-width: 450px) {
+  .insights-section {
+    padding: 14px;
+  }
+
+  .insight-card {
+    padding: 13px;
+  }
+
+  .insight-metrics {
+    gap: 8px;
+  }
+
+  .insight-metric {
+    padding: 9px;
+  }
+
+  .insight-metric strong {
+    font-size: 14px;
+  }
+}

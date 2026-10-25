@@ -1,6 +1,5 @@
 
-from decimal import Decimal
-
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -41,20 +40,27 @@ def test_create_renewal_scenarios():
 
     assert response.status_code == 200
 
-    scenarios = response.json()
+    data = response.json()
+    scenarios = data["scenarios"]
+    insights = data["insights"]
+
     assert len(scenarios) == 2
+    assert len(insights) == 1
 
-    assert Decimal(
-        str(scenarios[0]["projected_mortgage_balance"])
-    ) == Decimal("819.10")
+    assert float(
+        scenarios[0]["projected_mortgage_balance"]
+    ) == pytest.approx(819.10)
 
-    assert Decimal(
-        str(scenarios[1]["projected_mortgage_balance"])
-    ) == Decimal("717.09")
+    assert float(
+        scenarios[1]["projected_mortgage_balance"]
+    ) == pytest.approx(717.09)
 
-    assert Decimal(
-        str(scenarios[0]["projected_ltv_percent"])
-    ) == Decimal("40.96")
+    assert float(
+        scenarios[0]["projected_ltv_percent"]
+    ) == pytest.approx(40.96)
+
+    assert insights[0]["kind"] == "target_already_reached"
+    assert float(insights[0]["target_ltv_percent"]) == 60.0
 
 
 def test_invalid_property_value_returns_422():

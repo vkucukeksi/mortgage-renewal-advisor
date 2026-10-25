@@ -3,15 +3,17 @@ from dataclasses import asdict
 from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
+from .scenarios.insights import generate_scenario_insights
 from .scenarios.overpayments import (
     generate_renewal_overpayment_scenarios,
 )
 
 
 app = FastAPI(title="Mortgage Renewal Advisor")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -21,6 +23,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 class RenewalScenarioRequest(BaseModel):
     """Input required to calculate renewal scenarios."""
@@ -45,6 +48,26 @@ class RenewalScenarioResponse(BaseModel):
     cash_remaining: Decimal
 
 
+class ScenarioInsightResponse(BaseModel):
+    """A plain-language finding derived from the scenarios."""
+
+    kind: str
+    title: str
+    message: str
+    target_ltv_percent: Decimal
+    overpayment: Decimal | None = None
+    projected_ltv_percent: Decimal | None = None
+    cash_remaining: Decimal | None = None
+    balance_reduction_vs_no_overpayment: Decimal | None = None
+
+
+class RenewalScenarioResultsResponse(BaseModel):
+    """Complete scenario results and their explanatory insights."""
+
+    scenarios: list[RenewalScenarioResponse]
+    insights: list[ScenarioInsightResponse]
+
+
 @app.get("/")
 def root():
     return {
@@ -54,19 +77,17 @@ def root():
 
 @app.get("/health")
 def health():
-    return {
-        "status": "healthy"
-    }
+    return {"status": "healthy"}
 
 
 @app.post(
     "/api/scenarios",
-    response_model=list[RenewalScenarioResponse],
+    response_model=RenewalScenarioResultsResponse,
 )
 def create_renewal_scenarios(
     request: RenewalScenarioRequest,
 ):
-    """Generate mortgage overpayment scenarios at renewal."""
+    """Generate renewal scenarios and explain LTV milestones."""
 
     try:
         scenarios = generate_renewal_overpayment_scenarios(
@@ -80,13 +101,22 @@ def create_renewal_scenarios(
             months_until_renewal=request.months_until_renewal,
             overpayment_options=request.overpayment_options,
         )
+
+        insights = generate_scenario_insights(scenarios)
+
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
             detail=str(exc),
         ) from exc
 
-    return [
-        RenewalScenarioResponse(**asdict(scenario))
-        for scenario in scenarios
-    ]
+    return RenewalScenarioResultsResponse(
+        scenarios=[
+            RenewalScenarioResponse(**asdict(scenario))
+            for scenario in scenarios
+        ],
+        insights=[
+            ScenarioInsightResponse(**asdict(insight))
+            for insight in insights
+        ],
+    )
