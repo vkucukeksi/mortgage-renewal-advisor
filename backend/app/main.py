@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 from .scenarios.overpayments import (
     generate_renewal_overpayment_scenarios,
@@ -11,7 +12,15 @@ from .scenarios.overpayments import (
 
 
 app = FastAPI(title="Mortgage Renewal Advisor")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class RenewalScenarioRequest(BaseModel):
     """Input required to calculate renewal scenarios."""
