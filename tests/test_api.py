@@ -35,6 +35,7 @@ def test_create_renewal_scenarios():
             "monthly_payment": 100,
             "months_until_renewal": 2,
             "overpayment_options": [0, 100],
+            "target_ltv_percentages": [60],
         },
     )
 
@@ -45,7 +46,7 @@ def test_create_renewal_scenarios():
     insights = data["insights"]
 
     assert len(scenarios) == 2
-    assert len(insights) == 1
+    assert len(insights) == 2
 
     assert float(
         scenarios[0]["projected_mortgage_balance"]

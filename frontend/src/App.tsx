@@ -28,7 +28,7 @@ type ScenarioInsight = {
   overpayment?: number
   projected_ltv_percent?: number
   cash_remaining?: number
-  balance_reduction_vs_no_overpayment?: number
+  balance_reduction_vs_baseline?: number
 }
 
 type ApiScenarioInsight = {
@@ -39,7 +39,7 @@ type ApiScenarioInsight = {
   overpayment?: number | string | null
   projected_ltv_percent?: number | string | null
   cash_remaining?: number | string | null
-  balance_reduction_vs_no_overpayment?: number | string | null
+  balance_reduction_vs_baseline?: number | string | null
 }
 
 type ApiResponse = {
@@ -128,8 +128,8 @@ function normalizeInsight(
       insight.projected_ltv_percent,
     ),
     cash_remaining: optionalNumber(insight.cash_remaining),
-    balance_reduction_vs_no_overpayment: optionalNumber(
-      insight.balance_reduction_vs_no_overpayment,
+    balance_reduction_vs_baseline: optionalNumber(
+      insight.balance_reduction_vs_baseline,
     ),
   }
 }
@@ -513,12 +513,12 @@ function App() {
                             </div>
                           )}
 
-                          {insight.balance_reduction_vs_no_overpayment !== undefined && (
+                          {insight.balance_reduction_vs_baseline !== undefined && (
                             <div className="insight-metric">
                               <span>Lower projected balance</span>
                               <strong>
                                 {formatMoney(
-                                  insight.balance_reduction_vs_no_overpayment,
+                                  insight.balance_reduction_vs_baseline,
                                 )}
                               </strong>
                             </div>

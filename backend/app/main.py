@@ -35,6 +35,14 @@ class RenewalScenarioRequest(BaseModel):
     monthly_payment: Decimal = Field(ge=0)
     months_until_renewal: int = Field(ge=0)
     overpayment_options: list[Decimal] = Field(min_length=1)
+    target_ltv_percentages: list[Decimal] = Field(
+    default_factory=lambda: [
+        Decimal("60"),
+        Decimal("55"),
+        Decimal("50"),
+    ],
+    min_length=1,
+)
 
 
 class RenewalScenarioResponse(BaseModel):
@@ -54,11 +62,11 @@ class ScenarioInsightResponse(BaseModel):
     kind: str
     title: str
     message: str
-    target_ltv_percent: Decimal
+    target_ltv_percent: Decimal | None = None
     overpayment: Decimal | None = None
     projected_ltv_percent: Decimal | None = None
     cash_remaining: Decimal | None = None
-    balance_reduction_vs_no_overpayment: Decimal | None = None
+    balance_reduction_vs_baseline: Decimal | None = None
 
 
 class RenewalScenarioResultsResponse(BaseModel):
@@ -102,7 +110,10 @@ def create_renewal_scenarios(
             overpayment_options=request.overpayment_options,
         )
 
-        insights = generate_scenario_insights(scenarios)
+        insights = generate_scenario_insights(
+            scenarios,
+            request.target_ltv_percentages,
+    )
 
     except ValueError as exc:
         raise HTTPException(
