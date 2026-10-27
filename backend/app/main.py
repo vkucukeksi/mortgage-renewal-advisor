@@ -113,7 +113,7 @@ def create_renewal_scenarios(
         insights = generate_scenario_insights(
             scenarios,
             request.target_ltv_percentages,
-    )
+        )
 
     except ValueError as exc:
         raise HTTPException(

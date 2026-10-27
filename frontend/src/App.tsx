@@ -58,6 +58,7 @@ const initialForm = {
   interestRate: '1.89',
   monthlyPayment: '1800',
   monthsUntilRenewal: '6',
+  targetLtvPercentages: '60, 55, 50',
   overpaymentOptions: '0, 10000, 20000, 25000, 30000, 50000',
 }
 
@@ -172,6 +173,31 @@ function App() {
         )
       }
 
+      if (new Set(overpaymentOptions).size !== overpaymentOptions.length) {
+        throw new Error('Each overpayment amount must be unique.')
+      }
+
+      const targetLtvPercentages = form.targetLtvPercentages
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map(Number)
+
+      if (
+        targetLtvPercentages.length === 0 ||
+        targetLtvPercentages.some(
+          (value) => !Number.isFinite(value) || value <= 0 || value > 100,
+        )
+      ) {
+        throw new Error(
+          'Enter valid LTV targets greater than 0 and at most 100, separated by commas.',
+        )
+      }
+
+      if (new Set(targetLtvPercentages).size !== targetLtvPercentages.length) {
+        throw new Error('Each LTV target must be unique.')
+      }
+
       const requestBody = {
         mortgage_balance: Number(form.mortgageBalance),
         property_value: Number(form.propertyValue),
@@ -179,6 +205,7 @@ function App() {
         annual_interest_rate_percent: Number(form.interestRate),
         monthly_payment: Number(form.monthlyPayment),
         months_until_renewal: Number(form.monthsUntilRenewal),
+        target_ltv_percentages: targetLtvPercentages,
         overpayment_options: overpaymentOptions,
       }
 
@@ -387,6 +414,23 @@ function App() {
                   />
                 </label>
               </div>
+
+              <label className="field options-field">
+                <span>LTV milestones (%)</span>
+                <input
+                  type="text"
+                  required
+                  value={form.targetLtvPercentages}
+                  onChange={(e) =>
+                    updateField('targetLtvPercentages', e.target.value)
+                  }
+                  placeholder="60, 55, 50"
+                />
+                <small>
+                  Choose LTV percentages to analyse, separated by commas.
+                  Enter values greater than 0 and up to 100, without duplicates.
+                </small>
+              </label>
 
               <label className="field options-field">
                 <span>Overpayment amounts (£)</span>
