@@ -1,13 +1,9 @@
 
 from dataclasses import asdict
 from decimal import Decimal
-from pathlib import Path
-import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .scenarios.insights import generate_scenario_insights
@@ -79,17 +75,9 @@ class RenewalScenarioResultsResponse(BaseModel):
 
 @app.get("/")
 def root():
-    index = frontend_dist / "index.html"
-    if index.is_file():
-        return FileResponse(index)
     return {
         "message": "Mortgage Renewal Advisor API is running"
     }
-
-
-@app.get("/api/status")
-def api_status():
-    return {"message": "Mortgage Renewal Advisor API is running"}
 
 
 @app.get("/health")
@@ -140,12 +128,3 @@ def create_renewal_scenarios(
             for insight in insights
         ],
     )
-
-
-# The deployment ZIP includes the built React app. Register this last so
-# API and health routes keep precedence over static file handling.
-frontend_dist = Path(os.environ.get(
-    "FRONTEND_DIST", str(Path(__file__).resolve().parents[2] / "frontend" / "dist")
-))
-if frontend_dist.is_dir():
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

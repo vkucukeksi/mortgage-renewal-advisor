@@ -1,7 +1,5 @@
 # Mortgage Renewal Advisor
 
-For local startup, Azure deployment and verification, see [the deployment guide](docs/AZURE.md).
-
 An AI-assisted mortgage renewal planning and decision-support tool.
 
 The goal is to answer a simple question:
