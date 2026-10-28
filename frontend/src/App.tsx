@@ -148,6 +148,8 @@ function App() {
     value: string,
   ) {
     setForm((current) => ({ ...current, [field]: value }))
+    setHasCalculated(false)
+    setError('')
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -213,7 +215,7 @@ function App() {
 
       try {
         response = await fetch(
-          'http://127.0.0.1:8000/api/scenarios',
+          '/api/scenarios',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -222,7 +224,7 @@ function App() {
         )
       } catch {
         throw new Error(
-          'Could not connect to the API. Check that FastAPI is running on port 8000.',
+          'Could not connect to the calculation service. Please try again.',
         )
       }
 
@@ -465,8 +467,8 @@ function App() {
               </button>
 
               <p className="form-footnote">
-                Your figures are sent to the local development API for
-                this calculation. This version does not save mortgage cases.
+                Your figures are sent to the calculation service.
+                This version does not save mortgage cases.
               </p>
             </form>
           </section>
@@ -579,7 +581,8 @@ function App() {
 
                 <div className="results-summary">
                   These projections assume your current interest rate and
-                  monthly payment remain unchanged until renewal.
+                  monthly payment remain unchanged until renewal. Each
+                  overpayment is made now, before the first projected month.
                 </div>
 
                 <div className="table-wrap">

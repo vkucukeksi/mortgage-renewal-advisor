@@ -42,6 +42,14 @@ def _format_percent(value: Decimal) -> str:
     return formatted
 
 
+def _meets_target(scenario: RenewalOverpaymentScenario, target: Decimal) -> bool:
+    # Use the original value, not the display-rounded LTV or equity.
+    return (
+        scenario.projected_mortgage_balance * Decimal("100")
+        <= target * scenario.property_value
+    )
+
+
 def generate_scenario_insights(
     scenarios: list[RenewalOverpaymentScenario],
     target_ltv_percentages: list[Decimal] | None = None,
@@ -75,7 +83,7 @@ def generate_scenario_insights(
         target_text = _format_percent(target)
 
         # The lowest-overpayment option already meets this target.
-        if baseline.projected_ltv_percent <= target:
+        if _meets_target(baseline, target):
             if baseline.overpayment == 0:
                 message = (
                     f"Your no-overpayment scenario is already projected "
@@ -107,7 +115,7 @@ def generate_scenario_insights(
         qualifying = [
             scenario
             for scenario in scenarios
-            if scenario.projected_ltv_percent <= target
+            if _meets_target(scenario, target)
         ]
 
         # Find the smallest tested overpayment that reaches the target.

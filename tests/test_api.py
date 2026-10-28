@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
+from backend.app.main import app, frontend_dist
 
 
 client = TestClient(app)
@@ -12,9 +12,12 @@ def test_root_endpoint():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "message": "Mortgage Renewal Advisor API is running"
-    }
+    if (frontend_dist / "index.html").is_file():
+        assert 'id="root"' in response.text
+    else:
+        assert response.json() == {
+            "message": "Mortgage Renewal Advisor API is running"
+        }
 
 
 def test_health_endpoint():

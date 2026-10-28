@@ -1,9 +1,13 @@
 
 from dataclasses import asdict
 from decimal import Decimal
+from pathlib import Path
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .scenarios.insights import generate_scenario_insights
@@ -33,16 +37,13 @@ class RenewalScenarioRequest(BaseModel):
     available_cash: Decimal = Field(ge=0)
     annual_interest_rate_percent: Decimal = Field(ge=0)
     monthly_payment: Decimal = Field(ge=0)
-    months_until_renewal: int = Field(ge=0)
-    overpayment_options: list[Decimal] = Field(min_length=1)
+    months_until_renewal: int = Field(ge=0, le=600)
+    overpayment_options: list[Decimal] = Field(min_length=1, max_length=100)
     target_ltv_percentages: list[Decimal] = Field(
-    default_factory=lambda: [
-        Decimal("60"),
-        Decimal("55"),
-        Decimal("50"),
-    ],
-    min_length=1,
-)
+        default_factory=lambda: [Decimal("60"), Decimal("55"), Decimal("50")],
+        min_length=1,
+        max_length=100,
+    )
 
 
 class RenewalScenarioResponse(BaseModel):
@@ -78,9 +79,17 @@ class RenewalScenarioResultsResponse(BaseModel):
 
 @app.get("/")
 def root():
+    index = frontend_dist / "index.html"
+    if index.is_file():
+        return FileResponse(index)
     return {
         "message": "Mortgage Renewal Advisor API is running"
     }
+
+
+@app.get("/api/status")
+def api_status():
+    return {"message": "Mortgage Renewal Advisor API is running"}
 
 
 @app.get("/health")
@@ -131,3 +140,12 @@ def create_renewal_scenarios(
             for insight in insights
         ],
     )
+
+
+# The deployment ZIP includes the built React app. Register this last so
+# API and health routes keep precedence over static file handling.
+frontend_dist = Path(os.environ.get(
+    "FRONTEND_DIST", str(Path(__file__).resolve().parents[2] / "frontend" / "dist")
+))
+if frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

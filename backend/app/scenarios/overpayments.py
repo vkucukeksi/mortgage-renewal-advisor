@@ -90,6 +90,7 @@ class RenewalOverpaymentScenario:
     projected_ltv_percent: Decimal
     projected_equity: Decimal
     cash_remaining: Decimal
+    property_value: Decimal
 
 
 def generate_renewal_overpayment_scenarios(
@@ -153,6 +154,7 @@ def generate_renewal_overpayment_scenarios(
         )
 
         scenario = RenewalOverpaymentScenario(
+            property_value=property_value,
             overpayment=overpayment,
             mortgage_balance_after_overpayment=(
                 balance_after_overpayment
