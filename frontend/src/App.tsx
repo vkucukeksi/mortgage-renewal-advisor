@@ -1,5 +1,6 @@
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
+import AIExplanation from './AIExplanation'
 import './App.css'
 
 type Scenario = {
@@ -142,18 +143,23 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [hasCalculated, setHasCalculated] = useState(false)
+  const [calculatedRequest, setCalculatedRequest] = useState('')
+  const revision = useRef(0)
 
   function updateField(
     field: keyof typeof initialForm,
     value: string,
   ) {
     setForm((current) => ({ ...current, [field]: value }))
+    revision.current += 1
+    setLoading(false)
     setHasCalculated(false)
     setError('')
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const submittedRevision = ++revision.current
     setError('')
     setLoading(true)
 
@@ -267,10 +273,13 @@ function App() {
       const normalizedInsights =
         apiResponse.insights.map(normalizeInsight)
 
+      if (submittedRevision !== revision.current) return
+      setCalculatedRequest(JSON.stringify(requestBody))
       setScenarios(normalizedScenarios)
       setInsights(normalizedInsights)
       setHasCalculated(true)
     } catch (err) {
+      if (submittedRevision !== revision.current) return
       setError(
         err instanceof Error
           ? err.message
@@ -280,7 +289,7 @@ function App() {
       setInsights([])
       setHasCalculated(false)
     } finally {
-      setLoading(false)
+      if (submittedRevision === revision.current) setLoading(false)
     }
   }
 
@@ -637,6 +646,7 @@ function App() {
                   across these scenarios, assuming the property value stays
                   unchanged.
                 </p>
+                <AIExplanation key={calculatedRequest} request={calculatedRequest} />
               </>
             )}
 

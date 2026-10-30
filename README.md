@@ -2,6 +2,29 @@
 
 An AI-assisted mortgage renewal planning and decision-support tool.
 
+## AI explanations
+
+After comparing scenarios, choose **Explain with AI**. The optional
+`POST /api/ai/explain` endpoint takes the same mortgage inputs as
+`/api/scenarios`, recalculates the results and sends those figures to Azure
+OpenAI for a plain-text explanation. AI output never replaces the calculation
+table. If AI is unavailable, calculations continue to work.
+
+Install `backend/requirements.txt` and set `AZURE_OPENAI_ENDPOINT` and
+`AZURE_OPENAI_DEPLOYMENT` in the backend environment (see
+`backend/.env.example`; it is not loaded automatically). Use a model deployment
+that supports the Responses API. No API key is used. In App Service the backend
+uses managed identity; locally it uses `DefaultAzureCredential`, including an
+existing Azure CLI sign-in. The selected identity needs permission on the
+Foundry/OpenAI resource. Set `AZURE_CLIENT_ID` only for a user-assigned identity.
+
+The UI explicitly sends figures to AI only when requested. Requests use
+`store=false`; this is not a claim about Azure's platform logging or retention.
+Explanations can contain mistakes and should be checked against the table.
+Backend tests simulate provider responses and failures; they do not verify live
+Foundry access or model explanation quality. Before public deployment, protect
+the paid AI endpoint with authentication and request limits.
+
 The goal is to answer a simple question:
 
 > **Given my mortgage situation, what are the sensible options I should consider when my current deal ends?**

@@ -5,6 +5,7 @@ from decimal import Decimal
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from .ai import AIUnavailable, explain_results
 
 from .scenarios.insights import generate_scenario_insights
 from .scenarios.overpayments import (
@@ -128,3 +129,20 @@ def create_renewal_scenarios(
             for insight in insights
         ],
     )
+
+
+class AIExplanationResponse(BaseModel):
+    explanation: str
+
+
+@app.post("/api/ai/explain", response_model=AIExplanationResponse)
+def explain_renewal_scenarios(request: RenewalScenarioRequest):
+    # Reuse validation and the engine; never accept client-calculated results.
+    results = create_renewal_scenarios(request)
+    try:
+        explanation = explain_results(
+            request.model_dump(mode="json"), results.model_dump(mode="json")
+        )
+    except AIUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    return AIExplanationResponse(explanation=explanation)
