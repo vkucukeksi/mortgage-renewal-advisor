@@ -122,10 +122,13 @@ def test_identity_selection_and_token_scope(monkeypatch, hosted):
     monkeypatch.setitem(sys.modules, 'azure', ModuleType('azure'))
     monkeypatch.setitem(sys.modules, 'azure.identity', identity)
     monkeypatch.setenv('AZURE_CLIENT_ID', 'identity-client-id')
+    monkeypatch.delenv('IDENTITY_ENDPOINT', raising=False)
     if hosted:
-        monkeypatch.setenv('IDENTITY_ENDPOINT', 'http://localhost/identity')
+        # Production must use managed identity even if the endpoint variable
+        # is unavailable; it must not try a developer credential chain.
+        monkeypatch.setenv('WEBSITE_SITE_NAME', 'mortgage-advisor')
     else:
-        monkeypatch.delenv('IDENTITY_ENDPOINT', raising=False)
+        monkeypatch.delenv('WEBSITE_SITE_NAME', raising=False)
     assert ai._access_token() == 'identity-token'
     assert used[0] == (('managed', {'client_id': 'identity-client-id'}) if hosted
                        else ('default', {'managed_identity_client_id': 'identity-client-id'}))

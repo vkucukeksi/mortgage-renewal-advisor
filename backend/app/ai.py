@@ -47,7 +47,9 @@ def _access_token() -> str:
         client_id = os.getenv("AZURE_CLIENT_ID")
         credential = (
             ManagedIdentityCredential(client_id=client_id)
-            if os.getenv("IDENTITY_ENDPOINT")
+            # App Service must never fall back to developer credentials, even
+            # when its identity endpoint is temporarily missing/misconfigured.
+            if os.getenv("WEBSITE_SITE_NAME") or os.getenv("IDENTITY_ENDPOINT")
             else DefaultAzureCredential(managed_identity_client_id=client_id)
         )
         with credential:
