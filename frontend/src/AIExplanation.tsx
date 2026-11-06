@@ -4,11 +4,20 @@ export default function AIExplanation({ request }: { request: string }) {
   const [explanation, setExplanation] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [retryAt, setRetryAt] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
   const active = useRef<AbortController | null>(null)
 
   useEffect(() => () => active.current?.abort(), [])
+  useEffect(() => {
+    if (!retryAt) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [retryAt])
+  const retrySeconds = Math.max(0, Math.ceil((retryAt - now) / 1000))
 
   async function explain() {
+    if (loading || Date.now() < retryAt) return
     active.current?.abort()
     const controller = new AbortController()
     active.current = controller
@@ -22,6 +31,13 @@ export default function AIExplanation({ request }: { request: string }) {
         body: request,
         signal: controller.signal,
       })
+      if (response.status === 429 || response.status === 503) {
+        const header = response.headers.get('Retry-After')
+        const seconds = header === null ? (response.status === 429 ? 30 : 0) : Number(header)
+        const delay = Number.isFinite(seconds) ? Math.min(86400, Math.max(0, seconds)) : 30
+        setNow(Date.now())
+        setRetryAt(Date.now() + delay * 1000)
+      }
       const data: unknown = await response.json()
       if (!response.ok) {
         throw new Error(
@@ -52,11 +68,17 @@ export default function AIExplanation({ request }: { request: string }) {
         Get a plain-language explanation of these calculated scenarios.
         Clicking sends your mortgage figures and results to Azure OpenAI.
       </p>
-      <button className="primary-button" type="button" onClick={explain} disabled={loading}>
+      <button className="primary-button" type="button" onClick={explain} disabled={loading || retrySeconds > 0}>
         {loading ? 'Preparing explanation…' : explanation ? 'Explain again' : 'Explain with AI'}
       </button>
       {loading && <p role="status">Generating your explanation…</p>}
       {error && <p className="error-message" role="alert">{error}</p>}
+      {retrySeconds > 0 && <p role="status">
+        {retrySeconds >= 3600
+          ? `Try again after ${new Date(retryAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`
+          : `Try again in ${retrySeconds} seconds.`}
+        {' '}Your mortgage calculations are still available.
+      </p>}
       {explanation && <div className="ai-explanation" aria-live="polite">{explanation}</div>}
       <p>AI-generated explanations may contain mistakes. Check the calculated table.
         For planning only; not financial advice.</p>

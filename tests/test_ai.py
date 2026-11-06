@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 from backend.app import ai
 from backend.app.main import app
 
-client = TestClient(app)
+pytestmark = pytest.mark.usefixtures("quota_guard")
+client = TestClient(app, client=("127.0.0.1", 50000))
 SMALL = dict(mortgage_balance=1000, property_value=2000, available_cash=100,
              annual_interest_rate_percent=12, monthly_payment=100,
              months_until_renewal=2, overpayment_options=[0, 100], target_ltv_percentages=[40])
@@ -30,14 +31,14 @@ def provider(monkeypatch):
     original = httpx.Client
     captured = []
 
-    def configure(answer=ANSWER, status=200, timeout=False):
+    def configure(answer=ANSWER, status=200, timeout=False, headers=None):
         def respond(request):
             captured.append(json.loads(request.content))
             assert request.headers['Authorization'] == 'Bearer test-token'
             assert str(request.url) == 'https://example.openai.azure.com/openai/v1/responses'
             if timeout:
                 raise httpx.ReadTimeout('private provider details', request=request)
-            return httpx.Response(status, json=answer, request=request)
+            return httpx.Response(status, json=answer, request=request, headers=headers)
         monkeypatch.setattr(ai.httpx, 'Client', lambda **kwargs: original(
             **kwargs, transport=httpx.MockTransport(respond)))
         return captured
@@ -68,7 +69,7 @@ def test_invalid_inputs_never_call_ai(changes, status, provider):
     assert captured == []
 
 
-@pytest.mark.parametrize('kwargs', [dict(status=401), dict(status=429), dict(status=500),
+@pytest.mark.parametrize('kwargs', [dict(status=401), dict(status=500),
     dict(timeout=True), dict(answer={'status': 'completed', 'output': []}),
     dict(answer={'status': 'incomplete', 'output': ANSWER['output']}),
     dict(answer={'output': 'invalid'}), dict(answer={'status': 'completed', 'output': [
@@ -88,6 +89,28 @@ def test_missing_config_does_not_require_identity(monkeypatch):
     result = client.post('/api/ai/explain', json=SMALL)
     assert result.status_code == 503
     assert 'not configured' in result.json()['detail']
+
+
+def test_provider_429_is_shared_cooldown(provider, quota_guard):
+    captured = provider(status=429)
+    response = client.post('/api/ai/explain', json=SMALL)
+    assert response.status_code == 429
+    assert response.headers['Retry-After'] == '30'
+    other = TestClient(app, client=('192.0.2.4', 50000))
+    assert other.post('/api/ai/explain', json=SMALL).status_code == 429
+    assert len(captured) == 1
+    assert quota_guard.store.state.used == 1
+
+
+@pytest.mark.parametrize('header, expected', [('7', '7'), ('0', '1'), ('-10', '1'),
+    ('garbage', '30'), ('NaN', '30'), ('Infinity', '30'), ('99999', '3600'),
+    ('Fri, 01 Jan 2100 00:00:00 GMT', '3600')])
+def test_provider_retry_after_is_bounded(provider, header, expected):
+    captured = provider(status=429, headers={'Retry-After': header})
+    response = client.post('/api/ai/explain', json=SMALL)
+    assert response.status_code == 429
+    assert response.headers['Retry-After'] == expected
+    assert len(captured) == 1
 
 
 def test_auth_failure_is_safe(provider, monkeypatch):

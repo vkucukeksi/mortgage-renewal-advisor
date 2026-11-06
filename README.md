@@ -1,5 +1,8 @@
 # Mortgage Renewal Advisor
 
+AI request quotas, local testing and production prerequisites are documented in
+[AI safeguards](docs/AI_SAFEGUARDS.md).
+
 An AI-assisted mortgage renewal planning and decision-support tool.
 
 The goal is to answer a simple question:

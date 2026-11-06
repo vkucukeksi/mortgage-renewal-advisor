@@ -20,3 +20,34 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tests, emulator data, coverage and temporary release files
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+.azurite/
+azurite-data/
+__azurite*__.*
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
+artifacts/
+tmp/
+temp/
+*.tmp
+*.temp
+*.log
+*.zip
+*.pem
+*.key
+*.pfx
+*.p12
+*.local
+*.bak
+.mypy_cache/
+.ruff_cache/
+.tox/
+test-results/
+playwright-report/

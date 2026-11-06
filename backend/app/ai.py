@@ -2,9 +2,13 @@
 import json
 import os
 from urllib.parse import urlsplit
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+import math
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
+from .ai_guard import Throttled
 
 
 class AIUnavailable(Exception):
@@ -81,6 +85,21 @@ def explain_results(inputs: dict, results: dict) -> str:
                     "store": False,
                 },
             )
+            if response.status_code == 429:
+                # Bound upstream retry guidance; do not automatically retry a
+                # potentially billable call. The guard shares this cooldown.
+                value = response.headers.get("Retry-After", "30")
+                try:
+                    delay = float(value)
+                except ValueError:
+                    try:
+                        delay = (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
+                    except (ValueError, TypeError, OverflowError):
+                        delay = 30
+                if not math.isfinite(delay):
+                    delay = 30
+                raise Throttled("The AI service is busy. Please wait before trying again.",
+                                min(3600, max(1, math.ceil(delay))))
             response.raise_for_status()
             result = Response.model_validate(response.json())
         text = "\n\n".join(

@@ -1,11 +1,15 @@
 
 from dataclasses import asdict
 from decimal import Decimal
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from .ai import AIUnavailable, explain_results
+from .ai_guard import GuardUnavailable, Throttled, get_guard, visitor_key
+from .body_limit import AIBodyLimit
 
 from .scenarios.insights import generate_scenario_insights
 from .scenarios.overpayments import (
@@ -14,6 +18,21 @@ from .scenarios.overpayments import (
 
 
 app = FastAPI(title="Mortgage Renewal Advisor")
+app.add_middleware(AIBodyLimit)
+
+
+@app.exception_handler(GuardUnavailable)
+async def quota_unavailable(_request, _exc):
+    return JSONResponse(
+        {"detail": "AI safeguards are temporarily unavailable. Mortgage calculations are still available."},
+        status_code=503, headers={"Retry-After": "30", "Cache-Control": "no-store"},
+    )
+
+
+@app.exception_handler(Throttled)
+async def ai_throttled(_request, exc):
+    return JSONResponse({"detail": str(exc)}, status_code=429,
+                        headers={"Retry-After": str(exc.retry_after), "Cache-Control": "no-store"})
 
 app.add_middleware(
     CORSMiddleware,
@@ -135,14 +154,34 @@ class AIExplanationResponse(BaseModel):
     explanation: str
 
 
+Money = Annotated[Decimal, Field(ge=0, le=Decimal("1000000000000"), max_digits=15, decimal_places=2)]
+
+
+class AIExplanationRequest(RenewalScenarioRequest):
+    # Restrict the paid endpoint without reducing calculator functionality.
+    model_config = ConfigDict(extra="forbid")
+    mortgage_balance: Money
+    property_value: Money = Field(gt=0)
+    available_cash: Money
+    monthly_payment: Money
+    annual_interest_rate_percent: Decimal = Field(ge=0, le=25, max_digits=6, decimal_places=4)
+    overpayment_options: list[Money] = Field(min_length=1, max_length=10)
+    target_ltv_percentages: list[Annotated[Decimal, Field(gt=0, le=100, max_digits=5, decimal_places=2)]] = Field(
+        default_factory=lambda: [Decimal("60"), Decimal("55"), Decimal("50")],
+        min_length=1, max_length=5,
+    )
+
+
 @app.post("/api/ai/explain", response_model=AIExplanationResponse)
-def explain_renewal_scenarios(request: RenewalScenarioRequest):
+def explain_renewal_scenarios(request: AIExplanationRequest, http_request: Request):
     # Reuse validation and the engine; never accept client-calculated results.
     results = create_renewal_scenarios(request)
     try:
-        explanation = explain_results(
-            request.model_dump(mode="json"), results.model_dump(mode="json")
-        )
+        guard = get_guard()
+        with guard.admission(visitor_key(http_request)):
+            explanation = explain_results(
+                request.model_dump(mode="json"), results.model_dump(mode="json")
+            )
     except AIUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     return AIExplanationResponse(explanation=explanation)
