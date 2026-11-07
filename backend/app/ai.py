@@ -8,6 +8,7 @@ import math
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
+from .ai_diagnostics import ai_stage, azure_credential
 from .ai_guard import Throttled
 
 
@@ -46,17 +47,7 @@ class Response(BaseModel):
 def _access_token() -> str:
     # Lazy import: ordinary calculations still work without AI dependencies/config.
     try:
-        from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
-
-        client_id = os.getenv("AZURE_CLIENT_ID")
-        credential = (
-            ManagedIdentityCredential(client_id=client_id)
-            # App Service must never fall back to developer credentials, even
-            # when its identity endpoint is temporarily missing/misconfigured.
-            if os.getenv("WEBSITE_SITE_NAME") or os.getenv("IDENTITY_ENDPOINT")
-            else DefaultAzureCredential(managed_identity_client_id=client_id)
-        )
-        with credential:
+        with ai_stage("openai.identity.token"), azure_credential() as credential:
             return credential.get_token("https://cognitiveservices.azure.com/.default").token
     except Exception:
         raise AIUnavailable("AI authentication is unavailable. Calculated results are still available.") from None
@@ -73,7 +64,7 @@ def explain_results(inputs: dict, results: dict) -> str:
     url = "https://" + parsed.netloc + "/openai/v1/responses"
     token = _access_token()
     try:
-        with httpx.Client(timeout=httpx.Timeout(40, connect=5)) as client:
+        with ai_stage("openai.request"), httpx.Client(timeout=httpx.Timeout(40, connect=5)) as client:
             response = client.post(
                 url,
                 headers={"Authorization": "Bearer " + token},

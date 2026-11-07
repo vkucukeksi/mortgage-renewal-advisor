@@ -1,5 +1,6 @@
 """Cross-process AI admission control. No financial inputs or raw IPs are stored."""
 from contextlib import contextmanager
+from contextvars import copy_context
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from functools import lru_cache
@@ -15,6 +16,7 @@ from uuid import uuid4
 
 from fastapi import Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from .ai_diagnostics import ai_stage, azure_credential
 
 
 class GuardUnavailable(Exception):
@@ -64,13 +66,15 @@ class BlobStateStore:
 
     def read(self):
         try:
-            download = self.blob.download_blob()
-            if download.properties.size > 128 * 1024:
-                raise GuardUnavailable()
-            raw = download.readall()
-            if set(json.loads(raw)) != set(State.model_fields):
-                raise ValueError("Incomplete quota state")
-            return State.model_validate_json(raw), download.properties.etag
+            with ai_stage("quota.blob.read"):
+                download = self.blob.download_blob()
+                if download.properties.size > 128 * 1024:
+                    raise GuardUnavailable()
+                raw = download.readall()
+            with ai_stage("quota.state.validate"):
+                if set(json.loads(raw)) != set(State.model_fields):
+                    raise ValueError("Incomplete quota state")
+                return State.model_validate_json(raw), download.properties.etag
         except Exception as exc:
             # Missing/corrupt state is NOT initialized at runtime: that could
             # silently reset daily quotas after deletion or configuration errors.
@@ -80,17 +84,32 @@ class BlobStateStore:
         from azure.core import MatchConditions
         from azure.core.exceptions import HttpResponseError
         try:
-            self.blob.upload_blob(state.model_dump_json(), overwrite=True,
-                                  etag=etag, match_condition=MatchConditions.IfNotModified)
+            with ai_stage("quota.blob.write"):
+                try:
+                    self.blob.upload_blob(state.model_dump_json(), overwrite=True,
+                                          etag=etag, match_condition=MatchConditions.IfNotModified)
+                except HttpResponseError as exc:
+                    if exc.status_code == 412:
+                        return False
+                    raise
             return True
-        except HttpResponseError as exc:
-            if exc.status_code == 412:
-                return False
-            raise GuardUnavailable("AI quota store is unavailable.") from exc
         except Exception as exc:
             # An ambiguous write may have committed. Do not admit a provider
             # call or refund/retry a reservation when the outcome is unknown.
             raise GuardUnavailable("AI quota store is unavailable.") from exc
+
+
+class _StorageCredential:
+    def __init__(self, credential):
+        self.credential = credential
+
+    def get_token(self, *scopes, **kwargs):
+        with ai_stage("quota.identity.token"):
+            return self.credential.get_token(*scopes, **kwargs)
+
+    def get_token_info(self, *scopes, **kwargs):
+        with ai_stage("quota.identity.token"):
+            return self.credential.get_token_info(*scopes, **kwargs)
 
 
 def _day(now):
@@ -164,7 +183,8 @@ class QuotaGuard:
 
     @contextmanager
     def admission(self, visitor):
-        ticket = self.reserve(visitor)
+        with ai_stage("quota.reserve"):
+            ticket = self.reserve(visitor)
         stop, failed = threading.Event(), threading.Event()
         cooldown = 0
 
@@ -177,7 +197,7 @@ class QuotaGuard:
                     # Keep trying to renew while the provider is still running;
                     # never release an in-flight call on a transient failure.
 
-        thread = threading.Thread(target=heartbeat, daemon=True)
+        thread = threading.Thread(target=copy_context().run, args=(heartbeat,), daemon=True)
         thread.start()
         try:
             yield
@@ -248,8 +268,9 @@ def visitor_key(request: Request):
 @lru_cache(maxsize=1)
 def get_guard():
     try:
-        from azure.storage.blob import BlobClient
-        options = dict(connection_timeout=3, read_timeout=5, retry_total=0,
+        with ai_stage("quota.blob.import"):
+            from azure.storage.blob import BlobClient
+        options = dict(connection_timeout=3, read_timeout=5, retry_total=0, logging_enable=False,
                        api_version="2023-11-03")
         daily = int(os.getenv("AI_GLOBAL_DAILY_LIMIT", "50"))
         if not 1 <= daily <= 1000:
@@ -262,12 +283,11 @@ def get_guard():
                 raise ValueError("Production requires managed identity")
             blob = BlobClient.from_connection_string(connection, container, blob_name, **options)
         else:
-            from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
             endpoint = os.environ["AI_QUOTA_ACCOUNT_URL"]
             if not endpoint.startswith("https://"):
                 raise ValueError()
-            credential = (ManagedIdentityCredential(client_id=os.getenv("AZURE_CLIENT_ID"))
-                          if os.getenv("WEBSITE_SITE_NAME") else DefaultAzureCredential())
+            with ai_stage("quota.identity.configure"):
+                credential = _StorageCredential(azure_credential())
             blob = BlobClient(endpoint, container, blob_name, credential=credential, **options)
         return QuotaGuard(BlobStateStore(blob), Limits(daily=daily))
     except Exception:

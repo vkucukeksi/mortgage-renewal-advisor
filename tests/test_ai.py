@@ -147,13 +147,17 @@ def test_identity_selection_and_token_scope(monkeypatch, hosted):
     monkeypatch.setenv('AZURE_CLIENT_ID', 'identity-client-id')
     monkeypatch.delenv('IDENTITY_ENDPOINT', raising=False)
     if hosted:
-        # Production must use managed identity even if the endpoint variable
-        # is unavailable; it must not try a developer credential chain.
         monkeypatch.setenv('WEBSITE_SITE_NAME', 'mortgage-advisor')
+        with pytest.raises(ai.AIUnavailable):
+            ai._access_token()
+        assert used == []
+        monkeypatch.setenv('IDENTITY_ENDPOINT', 'http://127.0.0.1/identity')
+        monkeypatch.setenv('IDENTITY_HEADER', 'test-only')
     else:
         monkeypatch.delenv('WEBSITE_SITE_NAME', raising=False)
     assert ai._access_token() == 'identity-token'
-    assert used[0] == (('managed', {'client_id': 'identity-client-id'}) if hosted
+    assert used[0] == (('managed', {'client_id': 'identity-client-id', 'connection_timeout': 3,
+                                   'read_timeout': 5, 'retry_total': 0, 'use_env_settings': False}) if hosted
                        else ('default', {'managed_identity_client_id': 'identity-client-id'}))
     assert used[-1] == 'closed'
     assert scopes == ['https://cognitiveservices.azure.com/.default']

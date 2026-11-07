@@ -46,6 +46,12 @@ read/write/pool phases, not a hard end-to-end deadline. Expiry recovery cannot
 guarantee cancellation of an already accepted provider generation after a process
 crash or network failure. Conservative attempt accounting still bounds dispatches.
 
+On App Service, the identity client and Blob client each have a 3-second
+connect timeout, a 5-second read timeout and no SDK retries. These are
+transport-phase limits. The identity client connects directly to the local
+App Service identity endpoint and fails closed if the platform identity
+environment is missing. The calculator does not initialise these clients.
+
 ## Azure prerequisites for a later, separately approved deployment
 
 1. Reuse a suitable existing Storage account, subject to its owner's approval.
@@ -153,6 +159,25 @@ A later production deployment requires settings, container/RBAC setup and a
 restart/code release. The current B1 plan has no zero-downtime slot guarantee.
 Validate trusted proxy configuration before enabling AI. Keep the 2,000-token cap
 until a small separately approved real-model evaluation supports reducing it.
+
+## Troubleshooting a stalled AI request
+
+Uvicorn emits AI stage records at INFO, and stage failures at WARNING. Search
+for `AI trace=` to follow an anonymous request through body receipt, proxy
+validation, SDK imports, managed identity, Blob reads and conditional writes,
+quota admission, the model and the HTTP response. A stage with only a
+`started` record identifies the last observed operation. The records include
+stage names, durations, exception types and HTTP status codes. They omit
+headers, addresses, quota contents, SDK exception messages and mortgage data.
+
+For a production preflight, run a bounded Blob GET under the app's own
+system-assigned identity before exercising the paid model. An Azure CLI read
+under an operator identity does not test the app's access. Preserve the blob
+and its ETag. During an AI smoke test, an unchanged ETag means no quota update
+was committed, so check the body, proxy, SDK import, identity and Blob read
+stages before investigating Azure OpenAI. A successful admission changes the
+ETag before any model call. Use local Azurite and mocked calls to exhaust
+quotas or run concurrent requests.
 
 References:
 - https://learn.microsoft.com/azure/storage/blobs/concurrency-manage

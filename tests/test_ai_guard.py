@@ -1,5 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import logging
 import threading
 
 from fastapi import Request
@@ -142,6 +144,66 @@ def test_unconfigured_store_has_no_in_memory_fallback(monkeypatch):
     monkeypatch.delenv('AI_QUOTA_CONTAINER', raising=False)
     with pytest.raises(GuardUnavailable):
         get_guard()
+
+
+def test_stalled_managed_identity_fails_closed_without_blocking_calculator(monkeypatch, caplog):
+    requested, finish = threading.Event(), threading.Event()
+    token_requests = []
+
+    class SlowIdentity(BaseHTTPRequestHandler):
+        def do_GET(self):
+            token_requests.append(self.path)
+            requested.set()
+            finish.wait(12)
+        def log_message(self, *_args):
+            pass
+
+    def unexpected_model(*_args):
+        pytest.fail("The model was called without a quota reservation")
+
+    with ThreadingHTTPServer(('127.0.0.1', 0), SlowIdentity) as identity:
+        for name, value in {
+            'WEBSITE_SITE_NAME': 'test-app-service',
+            'IDENTITY_ENDPOINT': f'http://127.0.0.1:{identity.server_port}/identity',
+            'IDENTITY_HEADER': 'test-identity-header-never-log',
+            'AI_QUOTA_ACCOUNT_URL': 'https://unused.invalid',
+            'AI_QUOTA_CONTAINER': 'test-guard',
+            'AI_VISITOR_HASH_KEY': 'test-visitor-hash-secret-never-log',
+            'AI_TRUSTED_PROXY_CIDRS': '192.0.2.9/32',
+        }.items():
+            monkeypatch.setenv(name, value)
+        monkeypatch.delenv('AI_QUOTA_CONNECTION_STRING', raising=False)
+        monkeypatch.delenv('IDENTITY_SERVER_THUMBPRINT', raising=False)
+        monkeypatch.setattr(main, 'explain_results', unexpected_model)
+        get_guard.cache_clear()
+        server = threading.Thread(target=identity.serve_forever, daemon=True)
+        server.start()
+        try:
+            caplog.set_level(logging.INFO, logger='uvicorn.error.mortgage_ai')
+            with TestClient(main.app, client=('192.0.2.9', 50000)) as client:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    pending = executor.submit(client.post, '/api/ai/explain', json=SMALL,
+                                              headers={'X-Forwarded-For': '198.51.100.12'})
+                    assert requested.wait(4)
+                    assert client.get('/health').status_code == 200
+                    assert client.post('/api/scenarios', json=SMALL).status_code == 200
+                    assert not pending.done()
+                    response = pending.result(timeout=9)
+                    assert response.status_code == 503
+                    assert response.headers['Retry-After'] == '30'
+        finally:
+            finish.set()
+            identity.shutdown()
+            server.join()
+            get_guard.cache_clear()
+    assert len(token_requests) == 1
+    assert any('stage=quota.identity.token outcome=' in record.message
+               and record.levelno == logging.WARNING for record in caplog.records)
+    assert 'stage=quota.blob.write' not in caplog.text
+    assert 'stage=openai.explain' not in caplog.text
+    for sensitive in ('test-identity-header-never-log', 'test-visitor-hash-secret-never-log',
+                      '198.51.100.12', '192.0.2.9'):
+        assert sensitive not in caplog.text
 
 
 def ip_request(peer, forwarded=None):

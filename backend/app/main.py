@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 from .ai import AIUnavailable, explain_results
+from .ai_diagnostics import ai_stage
 from .ai_guard import GuardUnavailable, Throttled, get_guard, visitor_key
 from .body_limit import AIBodyLimit
 
@@ -175,13 +176,18 @@ class AIExplanationRequest(RenewalScenarioRequest):
 @app.post("/api/ai/explain", response_model=AIExplanationResponse)
 def explain_renewal_scenarios(request: AIExplanationRequest, http_request: Request):
     # Reuse validation and the engine; never accept client-calculated results.
-    results = create_renewal_scenarios(request)
-    try:
+    with ai_stage("request.calculate"):
+        results = create_renewal_scenarios(request)
+    with ai_stage("quota.visitor"):
+        visitor = visitor_key(http_request)
+    with ai_stage("quota.configure"):
         guard = get_guard()
-        with guard.admission(visitor_key(http_request)):
-            explanation = explain_results(
-                request.model_dump(mode="json"), results.model_dump(mode="json")
-            )
+    try:
+        with guard.admission(visitor):
+            with ai_stage("openai.explain"):
+                explanation = explain_results(
+                    request.model_dump(mode="json"), results.model_dump(mode="json")
+                )
     except AIUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     return AIExplanationResponse(explanation=explanation)
