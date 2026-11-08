@@ -58,6 +58,23 @@ def test_calculate_monthly_payment():
     assert result == Decimal("1627.24")
 
 
+@pytest.mark.parametrize(("balance", "rate", "months", "expected"), [
+    ("100000", "5", 300, "584.59"),
+    ("200000", "4.5", 360, "1013.37"),
+    ("200000", "4.5", 240, "1265.30"),
+    ("120000", "0", 240, "500.00"),
+    ("0", "4.5", 240, "0.00"),
+])
+def test_repayment_estimates(balance, rate, months, expected):
+    assert calculate_monthly_payment(Decimal(balance), Decimal(rate), months) == Decimal(expected)
+
+
+@pytest.mark.parametrize(("balance", "rate"), [("-1", "5"), ("100000", "-1")])
+def test_repayment_rejects_negative_balance_or_rate(balance, rate):
+    with pytest.raises(ValueError):
+        calculate_monthly_payment(Decimal(balance), Decimal(rate), 240)
+
+
 def test_invalid_property_value():
     with pytest.raises(ValueError):
         calculate_ltv(

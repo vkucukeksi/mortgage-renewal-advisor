@@ -17,8 +17,14 @@ invent figures, rates, lender products or eligibility, or change any milestone f
 Explain only the tested options, cash remaining and trade-offs. A lower mortgage balance
 includes the user's overpayment: do not describe the entire reduction as interest saved.
 Use brief plain-text paragraphs, no Markdown. Do not recommend a particular option.
-State that overpayments happen now, monthly payments and interest rate stay unchanged,
-and property value stays constant. Mention that fees, overpayment penalties, emergency
+State that overpayments happen now, the current payment and rate stay unchanged until
+renewal, and property value stays constant. When renewal_payments are present, explain
+how the tested rates and overpayments affect estimated monthly repayments. Quote only
+the supplied estimated_monthly_payment and change_from_current_monthly_payment figures
+for the corresponding option and rate. A positive change is higher than today's payment,
+and a negative change is lower. These estimates assume a standard repayment mortgage,
+a constant scenario rate and the entered remaining term at renewal. Omit repayment
+comparisons when no estimates are supplied. Mention that fees, overpayment penalties, emergency
 savings needs and savings interest are not modelled. End by noting that this is an
 AI-generated explanation for planning, not regulated financial advice. Keep under 250 words.
 """

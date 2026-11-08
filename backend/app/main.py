@@ -1,11 +1,13 @@
 
 from dataclasses import asdict
 from decimal import Decimal
+from typing import Annotated
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, field_validator
 from .ai import AIUnavailable, explain_results
+from .calculations.mortgage import calculate_monthly_payment, round_money
 
 from .scenarios.insights import generate_scenario_insights
 from .scenarios.overpayments import (
@@ -26,6 +28,9 @@ app.add_middleware(
 )
 
 
+RenewalRate = Annotated[Decimal, Field(ge=0, le=100, decimal_places=4)]
+
+
 class RenewalScenarioRequest(BaseModel):
     """Input required to calculate renewal scenarios."""
 
@@ -41,6 +46,25 @@ class RenewalScenarioRequest(BaseModel):
         min_length=1,
         max_length=100,
     )
+    remaining_term_years: StrictInt | None = Field(default=None, ge=1, le=50)
+    renewal_interest_rates_percent: list[RenewalRate] = Field(
+        default_factory=lambda: [Decimal("3.5"), Decimal("4.5"), Decimal("5.5")],
+        min_length=1,
+        max_length=10,
+    )
+
+    @field_validator("renewal_interest_rates_percent")
+    @classmethod
+    def unique_renewal_rates(cls, rates: list[Decimal]) -> list[Decimal]:
+        if len(set(rates)) != len(rates):
+            raise ValueError("Renewal interest rates must be unique.")
+        return rates
+
+
+class RenewalPaymentResponse(BaseModel):
+    annual_interest_rate_percent: Decimal
+    estimated_monthly_payment: Decimal
+    change_from_current_monthly_payment: Decimal
 
 
 class RenewalScenarioResponse(BaseModel):
@@ -52,6 +76,7 @@ class RenewalScenarioResponse(BaseModel):
     projected_ltv_percent: Decimal
     projected_equity: Decimal
     cash_remaining: Decimal
+    renewal_payments: list[RenewalPaymentResponse] = Field(default_factory=list)
 
 
 class ScenarioInsightResponse(BaseModel):
@@ -113,6 +138,27 @@ def create_renewal_scenarios(
             request.target_ltv_percentages,
         )
 
+        scenario_results = []
+        for scenario in scenarios:
+            payments = []
+            if request.remaining_term_years is not None:
+                for rate in request.renewal_interest_rates_percent:
+                    payment = calculate_monthly_payment(
+                        scenario.projected_mortgage_balance,
+                        rate,
+                        request.remaining_term_years * 12,
+                    )
+                    payments.append(RenewalPaymentResponse(
+                        annual_interest_rate_percent=rate,
+                        estimated_monthly_payment=payment,
+                        change_from_current_monthly_payment=round_money(
+                            payment - request.monthly_payment
+                        ),
+                    ))
+            scenario_results.append(RenewalScenarioResponse(
+                **asdict(scenario), renewal_payments=payments,
+            ))
+
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
@@ -120,10 +166,7 @@ def create_renewal_scenarios(
         ) from exc
 
     return RenewalScenarioResultsResponse(
-        scenarios=[
-            RenewalScenarioResponse(**asdict(scenario))
-            for scenario in scenarios
-        ],
+        scenarios=scenario_results,
         insights=[
             ScenarioInsightResponse(**asdict(insight))
             for insight in insights

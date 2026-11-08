@@ -74,14 +74,17 @@ def calculate_monthly_payment(
     remaining_term_months: int,
 ) -> Decimal:
     """Calculate the monthly repayment for a repayment mortgage."""
-    if mortgage_balance <= 0:
-        raise ValueError("Mortgage balance must be greater than zero.")
+    if mortgage_balance < 0:
+        raise ValueError("Mortgage balance cannot be negative.")
 
     if annual_interest_rate_percent < 0:
         raise ValueError("Interest rate cannot be negative.")
 
     if remaining_term_months <= 0:
         raise ValueError("Remaining term must be greater than zero.")
+
+    if mortgage_balance == 0:
+        return Decimal("0.00")
 
     monthly_rate = (
         annual_interest_rate_percent

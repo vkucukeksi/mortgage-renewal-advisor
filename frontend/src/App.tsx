@@ -3,6 +3,12 @@ import { useRef, useState, type FormEvent } from 'react'
 import AIExplanation from './AIExplanation'
 import './App.css'
 
+type RenewalPayment = {
+  annual_interest_rate_percent: number
+  estimated_monthly_payment: number
+  change_from_current_monthly_payment: number
+}
+
 type Scenario = {
   overpayment: number
   mortgage_balance_after_overpayment: number
@@ -10,6 +16,7 @@ type Scenario = {
   projected_ltv_percent: number
   projected_equity: number
   cash_remaining: number
+  renewal_payments: RenewalPayment[]
 }
 
 type ApiScenario = {
@@ -19,6 +26,9 @@ type ApiScenario = {
   projected_ltv_percent: number | string
   projected_equity: number | string
   cash_remaining: number | string
+  renewal_payments?: Array<{
+    [Field in keyof RenewalPayment]: number | string
+  }>
 }
 
 type ScenarioInsight = {
@@ -59,19 +69,22 @@ const initialForm = {
   interestRate: '1.89',
   monthlyPayment: '1800',
   monthsUntilRenewal: '6',
+  remainingTermYears: '',
+  renewalInterestRates: '3.5, 4.5, 5.5',
   targetLtvPercentages: '60, 55, 50',
   overpaymentOptions: '0, 10000, 20000, 25000, 30000, 50000',
 }
 
-const formatMoney = (amount: number) =>
+const formatMoney = (amount: number, fractionDigits = 0) =>
   amount.toLocaleString('en-GB', {
     style: 'currency',
     currency: 'GBP',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   })
 
 function normalizeScenario(scenario: ApiScenario): Scenario {
-  const normalized: Scenario = {
+  const figures = {
     overpayment: Number(scenario.overpayment),
     mortgage_balance_after_overpayment: Number(
       scenario.mortgage_balance_after_overpayment,
@@ -85,14 +98,31 @@ function normalizeScenario(scenario: ApiScenario): Scenario {
   }
 
   if (
-    Object.values(normalized).some(
+    Object.values(figures).some(
       (value) => !Number.isFinite(value),
     )
   ) {
     throw new Error('The API returned invalid scenario values.')
   }
 
-  return normalized
+  const renewal_payments = (scenario.renewal_payments ?? []).map((payment) => {
+    const normalized = {
+      annual_interest_rate_percent: Number(payment.annual_interest_rate_percent),
+      estimated_monthly_payment: Number(payment.estimated_monthly_payment),
+      change_from_current_monthly_payment: Number(payment.change_from_current_monthly_payment),
+    }
+    if (Object.values(normalized).some((value) => !Number.isFinite(value))) {
+      throw new Error('The API returned invalid renewal payment values.')
+    }
+    return normalized
+  })
+
+  return { ...figures, renewal_payments }
+}
+
+function paymentChange(change: number) {
+  if (change === 0) return 'Same as your current payment'
+  return `${formatMoney(Math.abs(change), 2)} ${change > 0 ? 'higher' : 'lower'} per month`
 }
 
 function optionalNumber(
@@ -206,6 +236,20 @@ function App() {
         throw new Error('Each LTV target must be unique.')
       }
 
+      const renewalInterestRates = form.renewalInterestRates
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map(Number)
+      if (
+        renewalInterestRates.length === 0 ||
+        renewalInterestRates.length > 10 ||
+        renewalInterestRates.some((rate) => !Number.isFinite(rate) || rate < 0 || rate > 100) ||
+        new Set(renewalInterestRates).size !== renewalInterestRates.length
+      ) {
+        throw new Error('Enter 1 to 10 distinct renewal rates between 0% and 100%, separated by commas.')
+      }
+
       const requestBody = {
         mortgage_balance: Number(form.mortgageBalance),
         property_value: Number(form.propertyValue),
@@ -213,6 +257,8 @@ function App() {
         annual_interest_rate_percent: Number(form.interestRate),
         monthly_payment: Number(form.monthlyPayment),
         months_until_renewal: Number(form.monthsUntilRenewal),
+        remaining_term_years: form.remainingTermYears ? Number(form.remainingTermYears) : null,
+        renewal_interest_rates_percent: renewalInterestRates,
         target_ltv_percentages: targetLtvPercentages,
         overpayment_options: overpaymentOptions,
       }
@@ -398,7 +444,7 @@ function App() {
                 </label>
 
                 <label className="field">
-                  <span>Monthly payment (£)</span>
+                  <span>Current monthly payment (£)</span>
                   <input
                     type="number"
                     min="0"
@@ -425,6 +471,30 @@ function App() {
                   />
                 </label>
               </div>
+
+              <label className="field options-field">
+                <span>Remaining term at renewal (years)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  step="1"
+                  value={form.remainingTermYears}
+                  onChange={(e) => updateField('remainingTermYears', e.target.value)}
+                />
+                <small>Enter the whole years left when your current deal ends to compare future payments.</small>
+              </label>
+
+              <label className="field options-field">
+                <span>Renewal interest rates (%)</span>
+                <input
+                  type="text"
+                  required
+                  value={form.renewalInterestRates}
+                  onChange={(e) => updateField('renewalInterestRates', e.target.value)}
+                />
+                <small>Enter up to 10 distinct annual rates separated by commas, using up to four decimal places.</small>
+              </label>
 
               <label className="field options-field">
                 <span>LTV milestones (%)</span>
@@ -646,6 +716,39 @@ function App() {
                   across these scenarios, assuming the property value stays
                   unchanged.
                 </p>
+                <section className="insights-section" aria-labelledby="repayment-title">
+                  <div className="insights-heading">
+                    <h3 id="repayment-title">What could your monthly payment be?</h3>
+                  </div>
+                  {scenarios[0]?.renewal_payments.length ? (
+                    <>
+                      <p className="insight-message">
+                        Compared with your current payment of <strong>{formatMoney(Number(form.monthlyPayment), 2)}</strong> per month.
+                      </p>
+                      {scenarios.map((scenario) => (
+                        <article className="insight-card" key={scenario.overpayment}>
+                          <h4>{scenario.overpayment === 0 ? 'No overpayment' : `${formatMoney(scenario.overpayment, 2)} overpayment`}</h4>
+                          <dl className="repayment-grid">
+                            {scenario.renewal_payments.map((payment) => (
+                              <div className="insight-metric" key={payment.annual_interest_rate_percent}>
+                                <dt>{payment.annual_interest_rate_percent}% annual rate</dt>
+                                <dd><strong>{formatMoney(payment.estimated_monthly_payment, 2)}</strong> per month</dd>
+                                <dd>{paymentChange(payment.change_from_current_monthly_payment)}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </article>
+                      ))}
+                      <p className="insight-disclaimer">
+                        Estimates use each projected renewal balance, the entered term at renewal
+                        and a constant scenario rate. They cover standard repayment mortgages
+                        with monthly payments and exclude fees and charges.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="insight-message">Enter your remaining term at renewal to see payment estimates.</p>
+                  )}
+                </section>
                 <AIExplanation key={calculatedRequest} request={calculatedRequest} />
               </>
             )}

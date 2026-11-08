@@ -144,3 +144,31 @@ def test_ai_receives_exact_ltv_boundary_findings(provider):
     assert response.status_code == 200
     results = json.loads(captured[0]['input'])['engine_results']
     assert results['insights'][0]['kind'] == 'target_not_reached'
+
+
+def test_ai_receives_only_server_calculated_repayment_figures(provider):
+    captured = provider()
+    inputs = EXAMPLE | {
+        'remaining_term_years': 20,
+        'renewal_interest_rates_percent': [0, 4.5],
+    }
+    expected = client.post('/api/scenarios', json=inputs).json()
+    response = client.post('/api/ai/explain', json=inputs | {
+        'engine_results': {'estimated_monthly_payment': '1.00'},
+    })
+    assert response.status_code == 200
+    sent = json.loads(captured[0]['input'])
+    assert sent['engine_results'] == expected
+    assert 'engine_results' not in sent['mortgage_inputs']
+    payment = sent['engine_results']['scenarios'][0]['renewal_payments'][1]
+    assert payment['estimated_monthly_payment'] == '2007.02'
+    assert payment['change_from_current_monthly_payment'] == '207.02'
+
+
+def test_invalid_renewal_rate_never_calls_ai(provider):
+    captured = provider()
+    response = client.post('/api/ai/explain', json=SMALL | {
+        'remaining_term_years': 20, 'renewal_interest_rates_percent': [-1],
+    })
+    assert response.status_code == 422
+    assert captured == []
