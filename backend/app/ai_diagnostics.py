@@ -46,8 +46,13 @@ def ai_stage(stage):
 
 
 def azure_credential():
+    if os.getenv("WEBSITE_SITE_NAME"):
+        with ai_stage("identity.import"):
+            from .app_service_identity import app_service_credential
+        return app_service_credential()
+
     with ai_stage("identity.import"):
-        from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+        from azure.identity import DefaultAzureCredential
 
     # The SDK can log exception text from the identity endpoint. Emit only the
     # stage diagnostics above. Blob HTTP logging is disabled on its client.
@@ -56,13 +61,4 @@ def azure_credential():
         sdk_logger.propagate = False
         if not sdk_logger.handlers:
             sdk_logger.addHandler(logging.NullHandler())
-    client_id = os.getenv("AZURE_CLIENT_ID")
-    if os.getenv("WEBSITE_SITE_NAME"):
-        if not (os.getenv("IDENTITY_ENDPOINT") and os.getenv("IDENTITY_HEADER")):
-            raise RuntimeError("App Service managed identity configuration is missing")
-    elif not os.getenv("IDENTITY_ENDPOINT"):
-        return DefaultAzureCredential(managed_identity_client_id=client_id)
-
-    # Blob transport settings do not apply to the credential's token request.
-    return ManagedIdentityCredential(client_id=client_id, connection_timeout=3,
-                                     read_timeout=5, retry_total=0, use_env_settings=False)
+    return DefaultAzureCredential(managed_identity_client_id=os.getenv("AZURE_CLIENT_ID"))

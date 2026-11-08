@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import ai
+from backend.app import app_service_identity
 from backend.app.main import app
 
 pytestmark = pytest.mark.usefixtures("quota_guard")
@@ -134,30 +135,23 @@ def test_identity_selection_and_token_scope(monkeypatch, hosted):
             scopes.append(scope)
             return SimpleNamespace(token='identity-token')
     identity = ModuleType('azure.identity')
-    def managed(**kwargs):
-        used.append(('managed', kwargs))
+    def managed():
+        used.append(('managed', {}))
         return Credential()
     def default(**kwargs):
         used.append(('default', kwargs))
         return Credential()
-    identity.ManagedIdentityCredential = managed
     identity.DefaultAzureCredential = default
-    monkeypatch.setitem(sys.modules, 'azure', ModuleType('azure'))
     monkeypatch.setitem(sys.modules, 'azure.identity', identity)
+    monkeypatch.setattr(app_service_identity, 'app_service_credential', managed)
     monkeypatch.setenv('AZURE_CLIENT_ID', 'identity-client-id')
     monkeypatch.delenv('IDENTITY_ENDPOINT', raising=False)
     if hosted:
         monkeypatch.setenv('WEBSITE_SITE_NAME', 'mortgage-advisor')
-        with pytest.raises(ai.AIUnavailable):
-            ai._access_token()
-        assert used == []
-        monkeypatch.setenv('IDENTITY_ENDPOINT', 'http://127.0.0.1/identity')
-        monkeypatch.setenv('IDENTITY_HEADER', 'test-only')
     else:
         monkeypatch.delenv('WEBSITE_SITE_NAME', raising=False)
     assert ai._access_token() == 'identity-token'
-    assert used[0] == (('managed', {'client_id': 'identity-client-id', 'connection_timeout': 3,
-                                   'read_timeout': 5, 'retry_total': 0, 'use_env_settings': False}) if hosted
+    assert used[0] == (('managed', {}) if hosted
                        else ('default', {'managed_identity_client_id': 'identity-client-id'}))
     assert used[-1] == 'closed'
     assert scopes == ['https://cognitiveservices.azure.com/.default']

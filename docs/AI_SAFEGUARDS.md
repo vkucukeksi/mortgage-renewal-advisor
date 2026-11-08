@@ -46,11 +46,13 @@ read/write/pool phases, not a hard end-to-end deadline. Expiry recovery cannot
 guarantee cancellation of an already accepted provider generation after a process
 crash or network failure. Conservative attempt accounting still bounds dispatches.
 
-On App Service, the identity client and Blob client each have a 3-second
-connect timeout, a 5-second read timeout and no SDK retries. These are
-transport-phase limits. The identity client connects directly to the local
-App Service identity endpoint and fails closed if the platform identity
-environment is missing. The calculator does not initialise these clients.
+On App Service, the credential calls the documented local managed identity
+REST endpoint with a 15-second socket timeout and no retries, proxies or
+redirects. It caches tokens in memory per resource and refreshes them two
+minutes before expiry. The Blob SDK retains its 3-second connect and 5-second
+read limits with no SDK retries. Missing platform identity configuration
+fails closed. Local development continues to use Azure Identity. The
+calculator does not initialise these clients.
 
 ## Azure prerequisites for a later, separately approved deployment
 

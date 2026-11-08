@@ -8,7 +8,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app import main
+from backend.app import app_service_identity, main
 from backend.app.ai import AIUnavailable
 from backend.app.ai_guard import (
     GuardUnavailable, Limits, QuotaGuard, Throttled, get_guard, visitor_key,
@@ -175,6 +175,8 @@ def test_stalled_managed_identity_fails_closed_without_blocking_calculator(monke
         monkeypatch.delenv('AI_QUOTA_CONNECTION_STRING', raising=False)
         monkeypatch.delenv('IDENTITY_SERVER_THUMBPRINT', raising=False)
         monkeypatch.setattr(main, 'explain_results', unexpected_model)
+        monkeypatch.setattr(app_service_identity, 'TOKEN_TIMEOUT', 2)
+        app_service_identity.app_service_credential.cache_clear()
         get_guard.cache_clear()
         server = threading.Thread(target=identity.serve_forever, daemon=True)
         server.start()
@@ -196,6 +198,7 @@ def test_stalled_managed_identity_fails_closed_without_blocking_calculator(monke
             identity.shutdown()
             server.join()
             get_guard.cache_clear()
+            app_service_identity.app_service_credential.cache_clear()
     assert len(token_requests) == 1
     assert any('stage=quota.identity.token outcome=' in record.message
                and record.levelno == logging.WARNING for record in caplog.records)
