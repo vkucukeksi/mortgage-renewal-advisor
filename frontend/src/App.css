@@ -79,95 +79,151 @@
   font-weight: 800;
 }
 
-.topbar-note {
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 30px;
-  background: #f7faf8;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+.calculator-link,
+.hero-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 44px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.calculator-link {
+  padding: 4px 0;
+  color: var(--green-dark);
+  font-size: 14px;
+}
+
+.calculator-link:hover {
+  text-decoration: underline;
+}
+
+.calculator-link:focus-visible,
+.hero-action:focus-visible,
+#calculator:focus-visible {
+  outline: 3px solid #16765d;
+  outline-offset: 4px;
 }
 
 .page-content {
   width: min(1420px, 100%);
   margin: 0 auto;
-  padding: 48px 36px 32px;
+  padding: 36px 36px 32px;
 }
 
-.page-heading {
-  position: relative;
-  isolation: isolate;
-  max-width: none;
-  margin-bottom: 34px;
-  padding: 8px 0 4px;
+.renewal-hero {
+  padding: clamp(28px, 5vw, 76px);
+  border-radius: 24px;
+  background: radial-gradient(ellipse at top right, #276954, transparent 65%), #103930;
+  color: white;
 }
 
-.page-heading::after {
-  position: absolute;
-  z-index: -1;
-  top: -28px;
-  right: 8%;
-  width: 280px;
-  height: 210px;
-  border: 1px solid rgb(8 127 91 / 10%);
-  border-radius: 42% 58% 65% 35% / 45% 42% 58% 55%;
-  background:
-    radial-gradient(
-      circle at 35% 40%,
-      rgb(201 242 122 / 44%),
-      transparent 55%
-    ),
-    linear-gradient(
-      140deg,
-      rgb(8 127 91 / 9%),
-      rgb(255 255 255 / 0%)
-    );
-  transform: rotate(-13deg);
-  pointer-events: none;
+.hero-access {
+  margin: 0 0 16px;
+  color: #ddf2e6;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.eyebrow,
+.hero-access span {
+  margin: 0 5px;
+}
+
+.renewal-hero h1 {
+  max-width: 950px;
+  margin: 0;
+  font: 800 clamp(34px, 5.2vw, 72px)/1.08 'Manrope', 'Segoe UI', sans-serif;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.renewal-hero h1 span {
+  display: block;
+  color: var(--mint);
+}
+
+.page-intro {
+  max-width: 570px;
+  margin: 20px 0 24px;
+  color: #e4f2e9;
+  font-size: clamp(15px, 1.6vw, 18px);
+  line-height: 1.6;
+}
+
+.hero-action {
+  min-height: 52px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: var(--mint);
+  color: #12362b;
+  font-size: 15px;
+}
+
+.hero-action:hover {
+  background: #dbf9a6;
+}
+
+.hero-action:focus-visible {
+  outline-color: white;
+}
+
+.hero-disclaimer {
+  margin: 16px 0 0;
+  color: #d4e9dc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.home-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0 40px;
+  padding: 0;
+  list-style: none;
+}
+
+.home-highlights li {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.highlight-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--green-light);
+  color: var(--green-dark);
+  font-weight: 800;
+}
+
+.home-highlights h2 {
+  margin: 12px 0 6px;
+  font-size: 17px;
+}
+
+.home-highlights p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+#calculator {
+  scroll-margin-top: 18px;
+}
+
 .section-kicker {
   color: var(--green);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1.9px;
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 0 15px;
-}
-
-.eyebrow::before {
-  width: 20px;
-  height: 3px;
-  border-radius: 4px;
-  background: var(--mint);
-  content: '';
-}
-
-.page-heading h1 {
-  max-width: 760px;
-  margin: 0;
-  color: var(--ink);
-  font-family: 'Manrope', sans-serif;
-  font-size: clamp(34px, 4vw, 48px);
-  font-weight: 800;
-  letter-spacing: -2px;
-  line-height: 1.12;
-}
-
-.page-intro {
-  max-width: 660px;
-  margin: 18px 0 0;
-  color: #627780;
-  font-size: 15px;
-  line-height: 1.85;
 }
 
 .workspace {
@@ -630,10 +686,6 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
-  .page-heading::after {
-    right: 5%;
-  }
-
   .results-panel {
     min-height: 0;
   }
@@ -657,35 +709,27 @@ tbody tr:hover td {
     font-size: 18px;
   }
 
-  .topbar-note {
-    display: none;
+  .topbar {
+    gap: 12px;
   }
 
   .page-content {
-    padding: 32px 15px 24px;
+    padding: 20px 15px 24px;
   }
 
-  .page-heading {
-    margin-bottom: 24px;
+  .renewal-hero {
+    padding: 28px 20px;
+    border-radius: 18px;
   }
 
-  .page-heading::after {
-    top: -10px;
-    right: -5px;
-    width: 145px;
-    height: 125px;
-    opacity: 0.65;
+  .home-highlights {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin: 14px 0 28px;
   }
 
-  .page-heading h1 {
-    max-width: 560px;
-    font-size: clamp(31px, 8vw, 39px);
-    letter-spacing: -1.4px;
-  }
-
-  .page-intro {
-    max-width: 520px;
-    font-size: 14px;
+  .home-highlights li {
+    padding: 16px;
   }
 
   .panel {

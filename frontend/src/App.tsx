@@ -398,27 +398,51 @@ function App() {
             Mortgage <strong>Renewal Advisor</strong>
           </span>
         </a>
-        <span className="topbar-note">
-          Mortgage planning workspace
-        </span>
+        <nav aria-label="Main navigation">
+          <a className="calculator-link" href="#calculator">Calculator <span aria-hidden="true">↘</span></a>
+        </nav>
       </header>
 
       <main className="page-content">
-        <section className="page-heading">
-          <p className="eyebrow">PLAN WITH CLARITY</p>
-          <h1>Make your next mortgage move with confidence.</h1>
+        <section className="renewal-hero" aria-labelledby="homepage-title">
+          <p className="hero-access">Free to explore <span aria-hidden="true">·</span> No sign-up</p>
+          <h1 id="homepage-title">Your mortgage deal is ending. <span>What's your next move?</span></h1>
           <p className="page-intro">
-            Explore how different overpayments could affect your mortgage
-            balance, loan-to-value ratio and remaining savings at renewal.
+            Compare overpayments, projected monthly repayments, loan-to-value (LTV)
+            and remaining savings before your mortgage renews.
+          </p>
+          <a className="hero-action" href="#calculator">
+            Explore your mortgage options <span aria-hidden="true">↓</span>
+          </a>
+          <p className="hero-disclaimer">
+            For planning only. Estimates are neither mortgage offers nor regulated financial advice.
           </p>
         </section>
 
+        <ul className="home-highlights" aria-label="What you can explore">
+          <li>
+            <span className="highlight-mark" aria-hidden="true">£</span>
+            <h2>Explore overpayments</h2>
+            <p>Adjust an amount to see how it affects your balance, LTV and savings at renewal.</p>
+          </li>
+          <li>
+            <span className="highlight-mark" aria-hidden="true">%</span>
+            <h2>Estimate future repayments</h2>
+            <p>See what you might pay each month at different renewal rates.</p>
+          </li>
+          <li>
+            <span className="highlight-mark" aria-hidden="true">✦</span>
+            <h2>Understand the trade-offs with AI</h2>
+            <p>Ask for a plain-language explanation of your calculated scenarios.</p>
+          </li>
+        </ul>
+
         <div className="workspace">
-          <section className="panel input-panel">
+          <section className="panel input-panel" id="calculator" aria-labelledby="calculator-title" tabIndex={-1}>
             <div className="panel-heading">
               <div>
                 <p className="section-kicker">STEP 1</p>
-                <h2>Your mortgage details</h2>
+                <h2 id="calculator-title">Your mortgage details</h2>
               </div>
               <span className="heading-icon" aria-hidden="true">↗</span>
             </div>
