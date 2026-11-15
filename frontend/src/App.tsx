@@ -1,5 +1,5 @@
 
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import AIExplanation from './AIExplanation'
 import './App.css'
 
@@ -71,6 +71,7 @@ const initialForm = {
   monthsUntilRenewal: '6',
   remainingTermYears: '',
   renewalInterestRates: '3.5, 4.5, 5.5',
+  overpaymentAmount: '0',
   targetLtvPercentages: '60, 55, 50',
   overpaymentOptions: '0, 10000, 20000, 25000, 30000, 50000',
 }
@@ -174,45 +175,89 @@ function App() {
   const [error, setError] = useState('')
   const [hasCalculated, setHasCalculated] = useState(false)
   const [calculatedRequest, setCalculatedRequest] = useState('')
+  const [advanced, setAdvanced] = useState(false)
+  const [plannerPending, setPlannerPending] = useState(false)
+  const formElement = useRef<HTMLFormElement>(null)
+  const activeRequest = useRef<AbortController | null>(null)
+  const debounce = useRef<number | undefined>(undefined)
   const revision = useRef(0)
+  const maximumOverpayment = Math.max(0, Math.min(
+    Number(form.availableCash) || 0,
+    Number(form.mortgageBalance) || 0,
+  ))
+  const amount = Number(form.overpaymentAmount)
+  const validAmount = /^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(form.overpaymentAmount)
+    && Number.isFinite(amount) && amount <= maximumOverpayment
+
+  useEffect(() => () => {
+    window.clearTimeout(debounce.current)
+    activeRequest.current?.abort()
+  }, [])
+
+  function invalidateResults() {
+    window.clearTimeout(debounce.current)
+    activeRequest.current?.abort()
+    revision.current += 1
+    setPlannerPending(false)
+    setLoading(false)
+    setHasCalculated(false)
+    setError('')
+  }
 
   function updateField(
     field: keyof typeof initialForm,
     value: string,
   ) {
     setForm((current) => ({ ...current, [field]: value }))
-    revision.current += 1
-    setLoading(false)
-    setHasCalculated(false)
-    setError('')
+    invalidateResults()
+    if (!advanced && field === 'overpaymentAmount') {
+      setPlannerPending(true)
+      debounce.current = window.setTimeout(() => {
+        setPlannerPending(false)
+        const planner = formElement.current
+        if (planner?.matches(':valid')) planner.requestSubmit()
+      }, 300)
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    window.clearTimeout(debounce.current)
+    setPlannerPending(false)
+    activeRequest.current?.abort()
+    const controller = new AbortController()
+    activeRequest.current = controller
     const submittedRevision = ++revision.current
     setError('')
     setLoading(true)
 
     try {
-      const overpaymentOptions = form.overpaymentOptions
+      const overpaymentOptions = advanced ? form.overpaymentOptions
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean)
-        .map(Number)
+        .map(Number) : [...new Set([0, amount])]
 
+      if (!advanced && !validAmount) {
+        throw new Error('Enter an overpayment within the available limit, using up to two decimal places.')
+      }
       if (
         overpaymentOptions.length === 0 ||
+        overpaymentOptions.length > 100 ||
         overpaymentOptions.some(
           (value) => !Number.isFinite(value) || value < 0,
         )
       ) {
         throw new Error(
-          'Enter valid, non-negative overpayment amounts separated by commas.',
+          'Enter 1 to 100 non-negative overpayment amounts separated by commas.',
         )
       }
 
       if (new Set(overpaymentOptions).size !== overpaymentOptions.length) {
         throw new Error('Each overpayment amount must be unique.')
+      }
+      if (overpaymentOptions.some((value) => value > maximumOverpayment)) {
+        throw new Error('Overpayments cannot exceed your available savings or mortgage balance.')
       }
 
       const targetLtvPercentages = form.targetLtvPercentages
@@ -272,6 +317,7 @@ function App() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           },
         )
       } catch {
@@ -382,7 +428,7 @@ function App() {
               figures to explore different possibilities.
             </p>
 
-            <form onSubmit={handleSubmit}>
+            <form ref={formElement} onSubmit={handleSubmit}>
               <div className="field-grid">
                 <label className="field">
                   <span>Outstanding mortgage (£)</span>
@@ -513,22 +559,65 @@ function App() {
                 </small>
               </label>
 
-              <label className="field options-field">
-                <span>Overpayment amounts (£)</span>
-                <input
-                  type="text"
-                  required
-                  value={form.overpaymentOptions}
-                  onChange={(e) =>
-                    updateField('overpaymentOptions', e.target.value)
-                  }
-                  placeholder="0, 10000, 20000, 25000"
-                />
-                <small>
-                  Enter amounts separated by commas. Each amount must
-                  be within your available savings and mortgage balance.
-                </small>
-              </label>
+              <fieldset className="overpayment-planner">
+                <legend>Overpayment planner</legend>
+                <label className="planner-mode">
+                  <input type="checkbox" checked={advanced} onChange={(e) => {
+                    setAdvanced(e.target.checked)
+                    invalidateResults()
+                  }} />
+                  Advanced: compare multiple amounts
+                </label>
+                {advanced ? (
+                  <label className="field options-field">
+                    <span>Overpayment amounts (£)</span>
+                    <input
+                      type="text"
+                      required
+                      value={form.overpaymentOptions}
+                      onChange={(e) => updateField('overpaymentOptions', e.target.value)}
+                    />
+                    <small>Separate amounts with commas. Include 0 for a no-overpayment comparison.</small>
+                  </label>
+                ) : (
+                  <>
+                    <label className="field options-field">
+                      <span>Adjust overpayment</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={maximumOverpayment}
+                        step="0.01"
+                        disabled={maximumOverpayment === 0}
+                        value={Math.min(maximumOverpayment, Math.max(0, amount || 0))}
+                        aria-valuetext={formatMoney(Math.min(maximumOverpayment, Math.max(0, amount || 0)), 2)}
+                        aria-describedby="overpayment-limit"
+                        onChange={(e) => updateField('overpaymentAmount', e.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Overpayment amount (£)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={maximumOverpayment}
+                        step="0.01"
+                        inputMode="decimal"
+                        required
+                        value={form.overpaymentAmount}
+                        aria-invalid={!validAmount}
+                        aria-describedby="overpayment-limit"
+                        onChange={(e) => updateField('overpaymentAmount', e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
+                <p id="overpayment-limit" className="insight-message">
+                  Maximum overpayment: {formatMoney(maximumOverpayment, 2)}.
+                  {maximumOverpayment === 0 && ' You can still calculate a scenario with no overpayment.'}
+                  {!advanced && !validAmount && ' Enter an amount between £0 and the maximum, to the nearest penny.'}
+                </p>
+              </fieldset>
 
               {error && (
                 <div className="error-message" role="alert">
@@ -565,7 +654,7 @@ function App() {
               )}
             </div>
 
-            {!hasCalculated && !loading && (
+            {!hasCalculated && !loading && !plannerPending && (
               <div className="empty-state">
                 <div className="empty-illustration" aria-hidden="true">
                   <span>£</span>
@@ -583,7 +672,7 @@ function App() {
               </div>
             )}
 
-            {loading && (
+            {(loading || plannerPending) && (
               <div className="loading-state" role="status">
                 Calculating scenarios and insights…
               </div>
@@ -678,7 +767,7 @@ function App() {
                       {scenarios.map((scenario, index) => (
                         <tr key={`${scenario.overpayment}-${index}`}>
                           <td className="overpayment-cell">
-                            {formatMoney(scenario.overpayment)}
+                            {formatMoney(scenario.overpayment, 2)}
                             {scenario.overpayment === 0 && (
                               <span className="scenario-tag">
                                 No overpayment
@@ -686,14 +775,14 @@ function App() {
                             )}
                           </td>
                           <td className="balance-cell">
-                            {formatMoney(scenario.projected_mortgage_balance)}
+                            {formatMoney(scenario.projected_mortgage_balance, 2)}
                           </td>
                           <td>
                             <span className="ltv-value">
                               {scenario.projected_ltv_percent.toFixed(2)}%
                             </span>
                           </td>
-                          <td>{formatMoney(scenario.cash_remaining)}</td>
+                          <td>{formatMoney(scenario.cash_remaining, 2)}</td>
                         </tr>
                       ))}
                     </tbody>
