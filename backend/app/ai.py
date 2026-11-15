@@ -65,6 +65,24 @@ def _access_token() -> str:
 
 
 def explain_results(inputs: dict, results: dict) -> str:
+    return _request_explanation(
+        INSTRUCTIONS, {"mortgage_inputs": inputs, "engine_results": results}, 2000,
+    )
+
+
+def choose_follow_up_point(points: list[str]) -> int:
+    """Let the model select a calculated point without generating user-facing claims."""
+    choice = _request_explanation(
+        "Choose the most useful supporting point for the mortgage question. "
+        "Reply with only its 1-based index. Never calculate or write an explanation.",
+        {"supporting_points": points}, 128,
+    ).strip()
+    if choice not in {str(i) for i in range(1, len(points) + 1)}:
+        raise AIUnavailable("AI could not select a calculated point.")
+    return int(choice) - 1
+
+
+def _request_explanation(instructions: str, payload: dict, max_output_tokens: int) -> str:
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").strip().rstrip("/")
     deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "").strip()
     parsed = urlsplit(endpoint)
@@ -81,9 +99,9 @@ def explain_results(inputs: dict, results: dict) -> str:
                 headers={"Authorization": "Bearer " + token},
                 json={
                     "model": deployment,
-                    "instructions": INSTRUCTIONS,
-                    "input": json.dumps({"mortgage_inputs": inputs, "engine_results": results}),
-                    "max_output_tokens": 2000,
+                    "instructions": instructions,
+                    "input": json.dumps(payload),
+                    "max_output_tokens": max_output_tokens,
                     "store": False,
                 },
             )

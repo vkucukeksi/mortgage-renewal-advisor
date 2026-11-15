@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import AIFollowUp from './AIFollowUp'
 
 export default function AIExplanation({ request }: { request: string }) {
   const [explanation, setExplanation] = useState('')
@@ -46,6 +47,7 @@ export default function AIExplanation({ request }: { request: string }) {
   }
 
   return (
+    <>
     <section className="assumption-note" aria-labelledby="ai-title" aria-busy={loading}>
       <h3 id="ai-title">Explain with AI</h3>
       <p>
@@ -61,5 +63,7 @@ export default function AIExplanation({ request }: { request: string }) {
       <p>AI-generated explanations may contain mistakes. Check the calculated table.
         For planning only; not financial advice.</p>
     </section>
+    <AIFollowUp request={request} />
+    </>
   )
 }

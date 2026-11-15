@@ -1,15 +1,17 @@
 
 from dataclasses import asdict
 from decimal import Decimal
+from threading import BoundedSemaphore
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, StrictInt, field_validator
-from .ai import AIUnavailable, explain_results
+from .ai import AIUnavailable, choose_follow_up_point, explain_results
 from .calculations.mortgage import calculate_monthly_payment, round_money
 
 from .scenarios.insights import generate_scenario_insights
+from .scenarios.follow_up import minimum_overpayment, parse_question
 from .scenarios.overpayments import (
     generate_renewal_overpayment_scenarios,
 )
@@ -189,3 +191,101 @@ def explain_renewal_scenarios(request: RenewalScenarioRequest):
     except AIUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
     return AIExplanationResponse(explanation=explanation)
+
+
+FollowUpMoney = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)]
+follow_up_slot = BoundedSemaphore(1)
+
+
+class FollowUpScenarioRequest(RenewalScenarioRequest):
+    mortgage_balance: FollowUpMoney
+    property_value: FollowUpMoney = Field(gt=0)
+    available_cash: FollowUpMoney
+    monthly_payment: FollowUpMoney
+    annual_interest_rate_percent: RenewalRate
+    overpayment_options: list[FollowUpMoney] = Field(min_length=1, max_length=10)
+    target_ltv_percentages: list[RenewalRate] = Field(
+        default_factory=lambda: [Decimal("60"), Decimal("55"), Decimal("50")],
+        min_length=1, max_length=10,
+    )
+
+
+class FollowUpRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=240)
+    scenario: FollowUpScenarioRequest
+
+
+class FollowUpResponse(BaseModel):
+    answer: str
+    figures: list[str]
+    explanation: str | None = None
+
+
+def _follow_up_calculation(question: str, scenario: FollowUpScenarioRequest) -> FollowUpResponse:
+    kind, value = parse_question(question)
+    # Check the submitted scenario before applying any overrides.
+    create_renewal_scenarios(scenario)
+    def money(amount: Decimal) -> str:
+        return f"£{amount:,.2f}"
+    budget = min(scenario.available_cash, scenario.mortgage_balance)
+    if kind == "rate":
+        if scenario.remaining_term_years is None:
+            raise ValueError("Enter your remaining term at renewal and recalculate before asking about a renewal rate.")
+        scenario = scenario.model_copy(update={"renewal_interest_rates_percent": [value]})
+        answer = f"Estimated monthly repayments at a {value:f}% renewal rate."
+    elif kind == "savings":
+        if value > scenario.available_cash:
+            raise ValueError("The savings you want to keep exceed the available savings in your calculation.")
+        limit = min(budget, scenario.available_cash - value)
+        scenario = scenario.model_copy(update={"overpayment_options": sorted({Decimal(0), limit})})
+        answer = f"You could overpay up to {money(limit)} while keeping at least {money(value)} in savings."
+    else:
+        required = minimum_overpayment(
+            scenario.mortgage_balance, scenario.property_value,
+            scenario.annual_interest_rate_percent, scenario.monthly_payment,
+            scenario.months_until_renewal, value,
+        )
+        scenario = scenario.model_copy(update={
+            "target_ltv_percentages": [value],
+            "overpayment_options": sorted({Decimal(0), min(required, budget)}),
+        })
+        if required > budget:
+            answer = (f"Reaching {value:f}% LTV at renewal would require an overpayment of "
+                      f"{money(required)}, which is {money(required - budget)} above your available budget.")
+        elif required == 0:
+            answer = f"Your projected balance already meets the {value:f}% LTV target without an overpayment."
+        else:
+            answer = f"The smallest overpayment projected to reach {value:f}% LTV at renewal is {money(required)}."
+
+    results = create_renewal_scenarios(scenario)
+    figures = []
+    for row in results.scenarios:
+        if kind == "rate":
+            payment = row.renewal_payments[0]
+            figures.append(f"With a {money(row.overpayment)} overpayment, your estimated monthly "
+                           f"repayment is {money(payment.estimated_monthly_payment)}.")
+        else:
+            figures.append(f"With a {money(row.overpayment)} overpayment, your projected renewal balance "
+                           f"is {money(row.projected_mortgage_balance)} at {row.projected_ltv_percent:f}% LTV, "
+                           f"with {money(row.cash_remaining)} in savings.")
+    return FollowUpResponse(answer=answer, figures=figures)
+
+
+@app.post("/api/ai/follow-up", response_model=FollowUpResponse)
+def explain_follow_up(request: FollowUpRequest):
+    try:
+        result = _follow_up_calculation(request.question, request.scenario)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    if not follow_up_slot.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="A follow-up is already being explained. Try again shortly.",
+                            headers={"Retry-After": "2"})
+    try:
+        result.explanation = result.figures[choose_follow_up_point(result.figures)]
+    except AIUnavailable:
+        # Keep the authoritative answer available when the model is offline.
+        pass
+    finally:
+        follow_up_slot.release()
+    return result
