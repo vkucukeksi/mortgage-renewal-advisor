@@ -2,6 +2,7 @@ export const followUpQuestions = [
   'What if my renewal interest rate increases to 5%?',
   'What if I keep £15,000 in savings?',
   'How much would I need to overpay to reach 60% LTV?',
+  'What if my deal period is 5 years?',
 ]
 
 export const maxQuestionLength = 240

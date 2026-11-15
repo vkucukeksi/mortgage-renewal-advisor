@@ -351,7 +351,8 @@
   font-weight: 700;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   min-height: 47px;
   padding: 11px 13px;
@@ -373,7 +374,8 @@
   border-color: #b7d8c5;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: var(--green);
   background: #ffffff;
   box-shadow: 0 0 0 4px rgb(8 127 91 / 10%);
@@ -973,4 +975,39 @@ tbody tr:hover td {
   .insight-metric strong {
     font-size: 14px;
   }
+}
+
+.deal-controls p {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.deal-field-grid,
+.deal-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+}
+
+.deal-controls .planner-mode {
+  margin: 0.75rem 0;
+}
+
+.deal-result h5,
+.deal-result p {
+  margin: 0 0 0.5rem;
+}
+
+.deal-result dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.15rem 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.deal-result dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }

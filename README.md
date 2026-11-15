@@ -72,3 +72,27 @@ Decision support
 ## Disclaimer
 
 This project is intended for educational and planning purposes only. It is not financial advice and does not replace regulated mortgage or financial advice.
+
+### New mortgage deal projections
+
+Enter the whole years remaining **at renewal** (the amortisation term), then select how
+long the new rate applies. The primary deal starts at 24 months and uses each entered
+renewal-rate scenario. Enable the comparison to test another period with its own rate and
+fee. With a one-year repayment term, choose a custom period of 12 months or less.
+Existing API clients that omit a deal period get the shorter of 24 months and their
+remaining term; requests with no term return renewal figures without deal projections.
+
+The model starts from the projected balance at renewal. A financed product fee is added
+to the loan before setting the monthly payment, while an upfront fee is taken from
+remaining cash and shown separately from mortgage payments. An upfront fee that exceeds
+remaining cash is shown as a shortfall, and a mortgage already paid off at renewal has
+no product fee. The fixed rate is divided by 12 and monthly interest is rounded to the
+nearest penny; the final payment is adjusted to clear the remaining balance without
+overpaying. Equity and LTV assume the same property value throughout.
+
+Totals cover the selected fixed period only. A longer period can show more interest
+simply because it covers more months, so these totals are not a like-for-like comparison
+over a common horizon. No later rate, further overpayment, early repayment charge,
+other fee or savings interest is assumed. The deals are hypothetical, not lender offers.
+For example, an AI follow-up may ask: “What if my deal period is 5 years?” This changes
+the primary period for that answer while keeping any independent comparison assumptions.

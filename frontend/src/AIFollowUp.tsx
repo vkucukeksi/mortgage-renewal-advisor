@@ -41,7 +41,7 @@ export default function AIFollowUp({ request }: { request: string }) {
   return (
     <section className="assumption-note follow-up" aria-labelledby="follow-up-title">
       <h3 id="follow-up-title">Ask AI a follow-up</h3>
-      <p id="follow-up-help">Ask about a renewal rate, savings to keep or an LTV target.
+      <p id="follow-up-help">Ask about a renewal rate, savings to keep, an LTV target or a deal period.
         Each question uses your current calculator results. Azure OpenAI selects a point to highlight.</p>
       <div className="follow-up-suggestions">
         {followUpQuestions.map((suggestion) => (

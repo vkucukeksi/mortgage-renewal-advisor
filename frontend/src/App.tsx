@@ -1,5 +1,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { DealControls, DealResults } from './DealComparison'
+import { dealFields, dealInputs, normalizeDeal, type ApiDeal, type DealProjection } from './deals'
 import AIExplanation from './AIExplanation'
 import './App.css'
 
@@ -16,6 +18,7 @@ type Scenario = {
   projected_ltv_percent: number
   projected_equity: number
   cash_remaining: number
+  deal_projections: DealProjection[]
   renewal_payments: RenewalPayment[]
 }
 
@@ -26,6 +29,7 @@ type ApiScenario = {
   projected_ltv_percent: number | string
   projected_equity: number | string
   cash_remaining: number | string
+  deal_projections?: ApiDeal[]
   renewal_payments?: Array<{
     [Field in keyof RenewalPayment]: number | string
   }>
@@ -63,6 +67,7 @@ type ApiErrorResponse = {
 }
 
 const initialForm = {
+  ...dealFields,
   mortgageBalance: '325000',
   propertyValue: '500000',
   availableCash: '50000',
@@ -118,7 +123,7 @@ function normalizeScenario(scenario: ApiScenario): Scenario {
     return normalized
   })
 
-  return { ...figures, renewal_payments }
+  return { ...figures, renewal_payments, deal_projections: (scenario.deal_projections ?? []).map(normalizeDeal) }
 }
 
 function paymentChange(change: number) {
@@ -295,14 +300,16 @@ function App() {
         throw new Error('Enter 1 to 10 distinct renewal rates between 0% and 100%, separated by commas.')
       }
 
+      const termYears = form.remainingTermYears ? Number(form.remainingTermYears) : null
       const requestBody = {
+        ...dealInputs(form, termYears),
         mortgage_balance: Number(form.mortgageBalance),
         property_value: Number(form.propertyValue),
         available_cash: Number(form.availableCash),
         annual_interest_rate_percent: Number(form.interestRate),
         monthly_payment: Number(form.monthlyPayment),
         months_until_renewal: Number(form.monthsUntilRenewal),
-        remaining_term_years: form.remainingTermYears ? Number(form.remainingTermYears) : null,
+        remaining_term_years: termYears,
         renewal_interest_rates_percent: renewalInterestRates,
         target_ltv_percentages: targetLtvPercentages,
         overpayment_options: overpaymentOptions,
@@ -543,7 +550,7 @@ function App() {
               </div>
 
               <label className="field options-field">
-                <span>Remaining term at renewal (years)</span>
+                <span>Remaining mortgage repayment term at renewal (years)</span>
                 <input
                   type="number"
                   min="1"
@@ -552,7 +559,7 @@ function App() {
                   value={form.remainingTermYears}
                   onChange={(e) => updateField('remainingTermYears', e.target.value)}
                 />
-                <small>Enter the whole years left when your current deal ends to compare future payments.</small>
+                <small>Enter the total whole years left to repay the mortgage when your current deal ends.</small>
               </label>
 
               <label className="field options-field">
@@ -565,6 +572,8 @@ function App() {
                 />
                 <small>Enter up to 10 distinct annual rates separated by commas, using up to four decimal places.</small>
               </label>
+
+              <DealControls fields={form} termYears={form.remainingTermYears} onChange={updateField} />
 
               <label className="field options-field">
                 <span>LTV milestones (%)</span>
@@ -855,13 +864,14 @@ function App() {
                       <p className="insight-disclaimer">
                         Estimates use each projected renewal balance, the entered term at renewal
                         and a constant scenario rate. They cover standard repayment mortgages
-                        with monthly payments and exclude fees and charges.
+                        with monthly payments. Fees added to the mortgage are included in the estimates; upfront fees and other charges are excluded from monthly payments.
                       </p>
                     </>
                   ) : (
                     <p className="insight-message">Enter your remaining term at renewal to see payment estimates.</p>
                   )}
                 </section>
+                <DealResults scenarios={scenarios} money={(value) => formatMoney(value, 2)} />
                 <AIExplanation key={calculatedRequest} request={calculatedRequest} />
               </>
             )}

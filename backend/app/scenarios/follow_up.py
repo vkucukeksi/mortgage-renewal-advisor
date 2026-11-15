@@ -5,7 +5,7 @@ import re
 from ..calculations.projections import project_mortgage_balance
 
 
-HELP = ("Ask one question about a renewal rate, savings to keep, or an LTV target. "
+HELP = ("Ask one question about a renewal rate, savings to keep, an LTV target, or a deal period (e.g. deal period 60 months). "
         "Use a suggested question as a starting point.")
 PERCENT = r"(\d{1,3}(?:\.\d{1,4})?)\s*%"
 MONEY = r"£?\s*((?:\d{1,12}|\d{1,3}(?:,\d{3}){1,3})(?:\.\d{1,2})?)"
@@ -27,6 +27,12 @@ def parse_question(question: str) -> tuple[str, Decimal]:
             if kind == "ltv" and not 0 < value <= 100:
                 raise ValueError("Enter an LTV target above 0% and up to 100%.")
             return kind, value
+    match = re.fullmatch(
+        r"(?:what if (?:my )?)?(?:new mortgage )?deal period(?: is| of)? (\d{1,3})[- ](months?|years?)",
+        normalized,
+    )
+    if match:
+        return "deal", Decimal(match[1]) * (12 if match[2].startswith("year") else 1)
     raise ValueError(HELP)
 
 
