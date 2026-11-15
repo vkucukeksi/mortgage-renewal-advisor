@@ -71,6 +71,8 @@ export default function AIFollowUp({ request }: { request: string }) {
           {otherFigures.length > 0 && <ul>{otherFigures.map((figure) => (
             <li key={figure}>{figure}</li>
           ))}</ul>}
+          <h4>Assumptions used</h4>
+          <ul>{result.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>
         </div>
       )}
     </section>

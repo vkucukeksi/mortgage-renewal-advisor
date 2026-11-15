@@ -28,6 +28,8 @@ def test_renewal_rate_uses_projected_balances_and_only_calculated_points(provide
         "With a £100.00 overpayment, your estimated monthly repayment is £7.61.",
     ]
     assert result["explanation"] == result["figures"][1]
+    assert any("12%" in line and "£100.00" in line for line in result["assumptions"])
+    assert any("5% renewal rate" in line and "10-year" in line for line in result["assumptions"])
     assert json.loads(captured[0]["input"]) == {"supporting_points": result["figures"]}
     assert captured[0]["max_output_tokens"] == 128
     assert captured[0]["store"] is False
@@ -82,6 +84,7 @@ def test_provider_failure_returns_calculation_without_untrusted_text(provider, o
     data = response.json()
     assert "£75.00" in data["answer"]
     assert data["figures"]
+    assert data["assumptions"]
     assert data["explanation"] is None
     assert "Invented" not in response.text
 

@@ -218,6 +218,7 @@ class FollowUpRequest(BaseModel):
 class FollowUpResponse(BaseModel):
     answer: str
     figures: list[str]
+    assumptions: list[str]
     explanation: str | None = None
 
 
@@ -268,7 +269,20 @@ def _follow_up_calculation(question: str, scenario: FollowUpScenarioRequest) -> 
             figures.append(f"With a {money(row.overpayment)} overpayment, your projected renewal balance "
                            f"is {money(row.projected_mortgage_balance)} at {row.projected_ltv_percent:f}% LTV, "
                            f"with {money(row.cash_remaining)} in savings.")
-    return FollowUpResponse(answer=answer, figures=figures)
+    assumptions = [
+        f"Starting mortgage balance {money(scenario.mortgage_balance)}, property value "
+        f"{money(scenario.property_value)}, and available savings {money(scenario.available_cash)}.",
+        f"Overpayments are made now. The current rate of {scenario.annual_interest_rate_percent:f}% "
+        f"and monthly payment of {money(scenario.monthly_payment)} apply for the "
+        f"{scenario.months_until_renewal} months until renewal.",
+        "Property value stays constant. Estimates exclude fees, early repayment charges and savings interest.",
+    ]
+    if kind == "rate":
+        assumptions.append(
+            f"Repayments use a constant {value:f}% renewal rate and a "
+            f"{scenario.remaining_term_years}-year remaining term on a standard repayment mortgage."
+        )
+    return FollowUpResponse(answer=answer, figures=figures, assumptions=assumptions)
 
 
 @app.post("/api/ai/follow-up", response_model=FollowUpResponse)

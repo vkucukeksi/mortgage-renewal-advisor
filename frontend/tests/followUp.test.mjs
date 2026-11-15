@@ -4,7 +4,7 @@ import { askFollowUp, followUpQuestions } from '../src/followUp.ts'
 
 test('sends the selected question and calculator snapshot and preserves figures when AI is unavailable', async (t) => {
   const scenario = { overpayment_options: [0, 5000], remaining_term_years: 20 }
-  const result = { answer: 'Calculated answer', figures: ['£500.00 per month'], explanation: null }
+  const result = { answer: 'Calculated answer', figures: ['£500.00 per month'], assumptions: ['20-year term'], explanation: null }
   const signal = new AbortController().signal
   t.mock.method(globalThis, 'fetch', async (url, request) => {
     assert.equal(url, '/api/ai/follow-up')
@@ -26,7 +26,7 @@ test('shows unsupported questions and provider failures as readable errors', asy
 
 test('rejects invalid input before a request and never displays an unrecognised AI claim', async (t) => {
   const fetch = t.mock.method(globalThis, 'fetch', async () =>
-    Response.json({ answer: 'Calculated answer', figures: ['A calculated fact'], explanation: 'Invented offer' }))
+    Response.json({ answer: 'Calculated answer', figures: ['A calculated fact'], assumptions: ['20-year term'], explanation: 'Invented offer' }))
   const signal = new AbortController().signal
   await assert.rejects(askFollowUp(' '.repeat(241), '{}', signal), /240 characters/)
   assert.equal(fetch.mock.callCount(), 0)

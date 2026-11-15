@@ -32,8 +32,10 @@ export async function askFollowUp(question: string, scenario: string, signal: Ab
   }
   if (typeof data?.answer !== 'string' || !Array.isArray(data.figures)
       || !data.figures.every((figure: unknown) => typeof figure === 'string')
+      || !Array.isArray(data.assumptions) || !data.assumptions.length
+      || !data.assumptions.every((assumption: unknown) => typeof assumption === 'string')
       || (data.explanation !== null && !data.figures.includes(data.explanation))) {
     throw new Error('The follow-up service returned an unreadable answer.')
   }
-  return data as { answer: string; figures: string[]; explanation: string | null }
+  return data as { answer: string; figures: string[]; assumptions: string[]; explanation: string | null }
 }
